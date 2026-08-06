@@ -1,0 +1,244 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<title>Smart Dynamic Pricing Dashboard</title>
+<style>
+  :root{--bg:#0f1420;--card:#171e2e;--line:#263049;--txt:#e7ecf5;--mut:#8b95ab;
+        --acc:#4f8cff;--ok:#3ddc97;--bad:#ff5470}
+  *{box-sizing:border-box}
+  body{margin:0;font-family:system-ui,Segoe UI,Roboto,sans-serif;background:var(--bg);color:var(--txt)}
+  header{padding:18px 24px;display:flex;justify-content:space-between;align-items:center;
+         border-bottom:1px solid var(--card);background:var(--card)}
+  header h1{font-size:18px;margin:0}
+  .pill{background:var(--line);padding:4px 10px;border-radius:20px;font-size:12px}
+  .pill.ok{color:var(--ok)} .pill.bad{color:var(--bad)}
+  main{padding:20px;display:grid;gap:18px}
+  .row{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:18px}
+  .stats{grid-template-columns:repeat(auto-fit,minmax(150px,1fr))}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:18px}
+  .card h2{margin:0 0 14px;font-size:15px;color:var(--acc)}
+  .stat .k{font-size:12px;color:var(--mut)} .stat .v{font-size:22px;font-weight:700;margin-top:2px}
+  label{display:block;font-size:12px;color:var(--mut);margin:10px 0 4px}
+  input,select{width:100%;padding:9px;border-radius:8px;border:1px solid var(--line);background:#0b1019;color:var(--txt)}
+  button{width:100%;padding:10px;margin-top:14px;border:0;border-radius:8px;background:var(--acc);color:#fff;font-weight:600;cursor:pointer}
+  .result{background:#0d1320;border:1px solid var(--line);border-radius:8px;padding:12px;margin-top:14px;font-size:13px;white-space:pre-wrap}
+  canvas{width:100%;height:200px;background:#0b1019;border:1px solid var(--line);border-radius:8px;margin-top:10px}
+</style>
+</head>
+<body>
+<header>
+  <h1>Smart Dynamic Pricing Dashboard</h1>
+  <span id="health" class="pill">checking…</span>
+</header>
+<main>
+  <section id="stats" class="row stats"></section>
+
+  <section class="row">
+    <div class="card">
+      <h2>Recommend Price</h2>
+      <label>Product ID</label>
+      <select id="prices-product"></select>
+      <label>Inventory (units)</label>
+      <input id="prices-inv" type="number" value="50" min="0"/>
+      <label>Competitor price (optional)</label>
+      <input id="prices-competitor" type="number" step="0.01" placeholder="auto"/>
+      <label>Demand pressure (0–1)</label>
+      <input id="prices-pressure" type="number" value="0.5" step="0.1" min="0" max="1"/>
+      <button id="btn-price">Get Recommended Price</button>
+      <div id="price-out" class="result">—</div>
+    </div>
+
+    <div class="card">
+      <h2>AI Negotiation</h2>
+      <label>Customer ID</label>
+      <select id="neg-customer"></select>
+      <label>Product ID</label>
+      <select id="neg-product"></select>
+      <label>Max budget (optional)</label>
+      <input id="neg-budget" type="number" step="0.01" placeholder="e.g. 6.00"/>
+      <label>Demand pressure (0–1)</label>
+      <input id="neg-pressure" type="number" value="0.5" step="0.1" min="0" max="1"/>
+      <button id="btn-neg">Run Negotiation</button>
+      <div id="neg-out" class="result">—</div>
+    </div>
+
+    <div class="card">
+      <h2>RL Price Agent</h2>
+      <label>Product ID</label>
+      <select id="rl-product"></select>
+      <label>Inventory (units)</label>
+      <input id="rl-inv" type="number" value="50" min="0"/>
+      <label>Demand pressure (0–1)</label>
+      <input id="rl-pressure" type="number" value="0.5" step="0.1" min="0" max="1"/>
+      <label>Competitor price (optional)</label>
+      <input id="rl-competitor" type="number" step="0.01" placeholder="auto"/>
+      <button id="btn-rl">Recommend with RL Agent</button>
+      <div id="rl-out" class="result">—</div>
+    </div>
+
+    <div class="card">
+      <h2>Model Performance</h2>
+      <div id="metrics" style="font-size:13px">—</div>
+      <h2 style="margin-top:18px">Sales History</h2>
+      <label>Product</label>
+      <select id="chart-product"></select>
+      <canvas id="chart"></canvas>
+    </div>
+  </section>
+</main>
+
+<script>
+const $ = id => document.getElementById(id);
+
+async function api(path, body) {
+  const r = await fetch(path, { method: body ? "POST" : "GET",
+    headers: { "Content-Type": "application/json" },
+    body: body ? JSON.stringify(body) : undefined });
+  if (!r.ok) { const e = await r.json().catch(() => ({})); throw new Error(e.detail || r.statusText); }
+  return r.json();
+}
+
+function fill(sel, items) {
+  const el = $(sel);
+  el.innerHTML = "";
+  items.forEach(v => el.add(new Option(v, v)));
+}
+
+function statCard(k, v) {
+  const d = document.createElement("div");
+  d.className = "stat";
+  d.innerHTML = `<div class="k">${k}</div><div class="v">${v}</div>`;
+  return d;
+}
+
+function drawChart(dates, units) {
+  const cv = $("chart");
+  cv.width = 560; cv.height = 220;
+  const ctx = cv.getContext("2d");
+  ctx.clearRect(0, 0, cv.width, cv.height);
+  const pad = 32, w = cv.width - pad * 2, h = cv.height - pad * 2;
+  const max = Math.max(...units, 1);
+  ctx.strokeStyle = "#263049"; ctx.lineWidth = 1;
+  for (let i = 0; i <= 4; i++) {
+    const y = pad + h - h * i / 4;
+    ctx.beginPath(); ctx.moveTo(pad, y); ctx.lineTo(pad + w, y); ctx.stroke();
+    ctx.fillStyle = "#8b95ab"; ctx.font = "10px sans-serif";
+    ctx.fillText(Math.round(max * i / 4), 4, y + 3);
+  }
+  ctx.beginPath(); ctx.strokeStyle = "#4f8cff"; ctx.lineWidth = 2;
+  units.forEach((u, i) => {
+    const x = pad + w * i / (units.length - 1 || 1);
+    const y = pad + h - h * u / max;
+    i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+  });
+  ctx.stroke();
+  ctx.fillStyle = "#8b95ab"; ctx.font = "10px sans-serif";
+  if (dates.length) ctx.fillText(dates[0].slice(5), pad, cv.height - 4);
+  if (dates.length > 1) ctx.fillText(dates[dates.length - 1].slice(5), pad + w - 40, cv.height - 4);
+}
+
+async function init() {
+  try {
+    const o = await api("/api/overview");
+    const prods = await api("/api/products");
+    const custs = await api("/api/customers");
+    fill("prices-product", prods.slice(0, 12));
+    fill("neg-product", prods.slice(0, 12));
+    fill("rl-product", prods.slice(0, 12));
+    fill("chart-product", prods.slice(0, 12));
+    fill("neg-customer", custs.slice(0, 20));
+
+    const stats = $("stats");
+    stats.innerHTML = "";
+    [["Products", o.products], ["Customers", o.customers],
+     ["Sales rows", o.total_sales_rows.toLocaleString()],
+     ["Sales last 30d", o.sales_last_30d.toLocaleString()],
+     ["Avg daily units", o.avg_daily_units],
+     ["Avg price", "$" + o.avg_price]]
+      .forEach(([k, v]) => stats.append(statCard(k, v)));
+
+    const mm = o.model_metrics && o.model_metrics.models;
+    if (mm) {
+      const b = o.model_backbone;
+      $("metrics").textContent = `${b}  R² ${mm.r2[b]} · MAE ${mm.mae[b]} · RMSE ${mm.rmse[b]}`;
+    }
+
+    $("chart-product").onchange = async () => {
+      const s = await api("/api/sales/" + $("chart-product").value);
+      drawChart(s.dates, s.units_sold);
+    };
+    const s = await api("/api/sales/" + $("chart-product").value);
+    drawChart(s.dates, s.units_sold);
+  } catch (e) {
+    $("health").textContent = "api offline — train models first (python -m src.training.train)";
+    $("metrics").textContent = "Models not ready.";
+  }
+}
+
+async function health() {
+  try {
+    const h = await api("/api/health");
+    const p = $("health");
+    p.textContent = h.models_ready ? "models ready" : "models NOT trained";
+    p.className = "pill " + (h.models_ready ? "ok" : "bad");
+  } catch (_) { $("health").textContent = "api offline"; }
+}
+
+$("btn-price").onclick = async () => {
+  try {
+    const r = await api("/api/price", {
+      product_id: $("prices-product").value,
+      inventory: +$("prices-inv").value,
+      competitor_price: $("prices-competitor").value ? +$("prices-competitor").value : null,
+      demand_pressure: +$("prices-pressure").value });
+    $("price-out").textContent =
+`Recommended price:  $${r.recommended_price}
+Expected demand:   ${r.expected_demand} units
+Expected revenue:  $${r.expected_revenue}
+Competitor price:  $${r.competitor_price}
+Inventory:         ${r.inventory}
+Cost:              $${r.cost}`;
+  } catch (e) { $("price-out").textContent = "Error: " + e.message; }
+};
+
+$("btn-neg").onclick = async () => {
+  try {
+    const r = await api("/api/negotiate", {
+      customer_id: $("neg-customer").value,
+      product_id: $("neg-product").value,
+      max_budget: $("neg-budget").value ? +$("neg-budget").value : null,
+      demand_pressure: +$("neg-pressure").value,
+      inventory: 50 });
+    $("neg-out").textContent =
+`${r.agreed ? "Deal agreed" : "No deal"}
+Final price: $${r.final_price} (${r.discount_pct}% off)
+Segment: ${r.customer_segment}  Tier: ${r.loyalty_tier}
+Savings: $${r.savings}   Rounds: ${r.rounds}
+Transcript: ${JSON.stringify(r.transcript)}`;
+  } catch (e) { $("neg-out").textContent = "Error: " + e.message; }
+};
+
+$("btn-rl").onclick = async () => {
+  try {
+    const r = await api("/api/rl-price", {
+      product_id: $("rl-product").value,
+      inventory: +$("rl-inv").value,
+      demand_pressure: +$("rl-pressure").value,
+      competitor_price: $("rl-competitor").value ? +$("rl-competitor").value : null });
+    $("rl-out").textContent =
+`RL recommended price:  $${r.price}
+Action multiplier:   ${r.action_multiplier} (action #${r.action_index})
+State: inventory ${r.product_state.inventory}, demand ${r.product_state.demand_pressure},
+       comp gap ${r.product_state.competitor_gap}
+Q-values: ${r.q_values.join(" | ")}
+Learned over ${r.learning_steps} steps`;
+  } catch (e) { $("rl-out").textContent = "Error: " + e.message; }
+};
+
+init();
+health();
+</script>
+</body>
+</html>

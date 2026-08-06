@@ -1,0 +1,13 @@
+.venv/
+__pycache__/
+*.pyc
+*.egg-info/
+data/raw/
+/models/
+notebooks/
+*.csv
+*.png
+!reports/*.png
+!reports/report.json
+.env
+.pytest_cache/
