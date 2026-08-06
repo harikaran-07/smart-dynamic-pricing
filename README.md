@@ -70,8 +70,14 @@ scripts/
   run.ps1              # start the API on Windows
   smoke_test.py        # quick API verification
   test_dashboard_demo.js  # Node harness for demo endpoints + assistant engine
+  test_engine.js          # Node harness for the upload/analytics/model pipeline
+  test_dashboard_boot.js  # Node DOM-shim boot test for charts/engine/analytics/upload
 dashboard/
   index.html           # monitor dashboard (served by the API)
+  charts.js            # professional canvas charting (tooltips, zoom, bands, markers)
+  engine.js            # data pipeline: CSV/Excel, mapping, cleaning, client ML, analytics
+  analytics.js         # Advanced Analytics section (Demand / Profit / Seasonal / Inventory)
+  upload.js            # Data Source control + upload workflow + toasts/overlay
   assistant.js         # AI Pricing Assistant engine + UI
 ```
 
@@ -120,11 +126,36 @@ The dashboard auto-detects whether the FastAPI backend is reachable. When it is 
 self-contained **demo mode** that simulates all endpoints (`/api/price`, `/api/negotiate`,
 `/api/rl-price`, `/api/overview`, `/api/sales/*`, `/api/manual`, `/api/insights`,
 `/api/products/detail`, `/api/customers/detail`) in the browser — no backend required.
-The **AI Pricing Assistant** works in both modes. Verify the demo endpoints + assistant
-engine with the Node harness:
+The **AI Pricing Assistant** works in both modes.
+
+### Data Source & upload
+
+The header **Data Source** dropdown switches between the built-in **Demo Dataset** and an
+**Upload Dataset** flow (CSV / Excel):
+
+- files are parsed (Excel via the lazily-loaded SheetJS CDN) with a progress bar,
+- columns are auto-detected and mapped to required features (fuzzy matching + manual
+  mapping dropdowns; missing required columns produce clear validation errors),
+- a preview of the first 10 rows is shown,
+- the pipeline then **cleans missing values, scales numeric features and trains a
+  client-side demand model**, reporting dataset size, features, products, records,
+  missing values, R²/MAE/RMSE and training time plus an AI-generated summary,
+- every prediction, chart and assistant answer switches to the uploaded dataset until
+  the dashboard is reset.
+
+The **Advanced Analytics** section (Overview / Demand / Profit / Seasonal /
+Inventory & Pricing tabs) renders the revenue, profit, demand and seasonal charts with
+tooltips, zoom/pan, legends, grid lines, confidence bands, reference lines, and automatic
+highest/lowest markers. Use **Refresh Model** to retrain, **Reset Dashboard** to restore
+the demo dataset, and **Export Predictions (CSV)** to download per-product price
+recommendations.
+
+Verify the new pipeline and modules with the Node harnesses:
 
 ```bash
-node scripts/test_dashboard_demo.js
+node scripts/test_dashboard_demo.js   # demo endpoints + assistant engine
+node scripts/test_engine.js           # CSV/mapping/cleaning/model/analytics/forecast
+node scripts/test_dashboard_boot.js   # DOM-shim boot for charts/engine/analytics/upload
 ```
 
 To publish: push this repo, enable **Settings → Pages** (deploy from the `main` branch,

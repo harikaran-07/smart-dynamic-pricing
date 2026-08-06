@@ -122,6 +122,11 @@
     </div>
   </div>
   <div class="spacer"></div>
+  <select id="data-source" class="ds-select">
+    <option value="demo">Demo Dataset</option>
+    <option value="upload">Upload Dataset</option>
+  </select>
+  <span id="ds-badge" class="ds-badge" style="display:none"></span>
   <span id="health" class="pill">checking</span>
 </header>
 
@@ -195,6 +200,9 @@
     </div>
   </section>
 
+  <h2 class="sec">Advanced Analytics</h2>
+  <div id="px-root"></div>
+
   <h2 class="sec">AI Pricing Assistant</h2>
   <div id="assistant-root"></div>
 
@@ -207,8 +215,45 @@
 <script>
 const $ = id => document.getElementById(id);
 const fmt = n => (n == null ? "—" : Number(n).toLocaleString(undefined,{maximumFractionDigits:2}));
+const P = () => (window.PricingData || null);
 
 let DEMO = false;
+
+function clientOverview(a){
+  return {
+    generated_on:new Date().toISOString(),
+    model_backbone:a.model.backbone,
+    model_metrics:{ models:{ linear:{ r2:a.model.r2, mae:a.model.mae, rmse:a.model.rmse } } },
+    products:a.products, customers:a.segments_total, total_sales_rows:a.records,
+    sales_last_30d:Math.round(a.total_units/Math.max(1,a.months)),
+    avg_daily_units:Math.round(a.total_units/Math.max(1,a.months*30)*10)/10,
+    avg_price:Math.round(a.productList.reduce((s,p)=>s+p.base_price,0)/Math.max(1,a.products)*100)/100,
+    segments:a.segments, arima_series_fitted:a.products,
+  };
+}
+
+/* Routes requests to the active dataset (uploaded) when available, otherwise
+ * falls back to the live API or the static demo simulation. */
+async function dataApi(path, body){
+  const pd = window.PricingData;
+  if (pd && pd.active()){
+    const a = pd.analytics();
+    const p = path.replace(/^\/api\//,"");
+    if (p === "products") return a.productList.map(x=>x.product_id);
+    if (p === "customers") return pd.customerList().map(x=>x.customer_id).slice(0,20);
+    if (p === "price"){
+      const prod = a.productList.find(x=>x.product_id===body.product_id)||a.productList[0];
+      return pd.optimizePrice(prod, body);
+    }
+    if (p === "rl-price") return pd.rlPrice(body);
+    if (p === "negotiate") return pd.negotiate(body);
+    if (p.startsWith("sales/")) return pd.salesSeries(p.slice(6));
+    if (p === "overview") return clientOverview(a);
+    if (p === "health") return { status:"ok", models_ready:true, source:"upload" };
+    return { status:"ok" };
+  }
+  return api(path, body);
+}
 
 async function api(path, body) {
   if (window.location.protocol === "file:") {
@@ -453,8 +498,19 @@ function statCard(k, v, s){
   return d;
 }
 
+let baseChart = null;
 function drawChart(dates, units){
   const cv = $("chart");
+  if (baseChart){ try{ baseChart.destroy(); }catch(_){} baseChart = null; }
+  if (window.PricingCharts && window.PricingCharts.Chart){
+    baseChart = new window.PricingCharts.Chart(cv, {
+      xLabels: dates.map(d => String(d).slice(5,10)),
+      series:[{ name:"Units sold", color:"#5b8cff", data:units, smooth:true, area:true }],
+      yFmt: v => fmt(v,0),
+      title: $("chart-product").value,
+    });
+    return;
+  }
   cv.width = 620; cv.height = 220;
   const ctx = cv.getContext("2d");
   ctx.clearRect(0,0,cv.width,cv.height);
@@ -471,18 +527,15 @@ function drawChart(dates, units){
     ctx.beginPath(); ctx.moveTo(padL,y); ctx.lineTo(padL+w,y); ctx.stroke();
     ctx.fillText(Math.round(max*i/4), 4, y+3);
   }
-  // area
   ctx.beginPath(); ctx.moveTo(xs(0), ys(units[0]));
   units.forEach((u,i)=>ctx.lineTo(xs(i), ys(u)));
   ctx.lineTo(xs(units.length-1), padT+h); ctx.lineTo(xs(0), padT+h); ctx.closePath();
   const grad = ctx.createLinearGradient(0,padT,0,padT+h);
   grad.addColorStop(0,"rgba(91,140,255,.45)"); grad.addColorStop(1,"rgba(91,140,255,0)");
   ctx.fillStyle = grad; ctx.fill();
-  // line
   ctx.beginPath(); ctx.strokeStyle = "#5b8cff"; ctx.lineWidth = 2.4; ctx.lineJoin="round";
   units.forEach((u,i)=> i===0?ctx.moveTo(xs(i),ys(u)):ctx.lineTo(xs(i),ys(u)));
   ctx.stroke();
-  // points
   ctx.fillStyle = "#5b8cff";
   units.forEach((u,i)=>{ ctx.beginPath(); ctx.arc(xs(i),ys(u),2.6,0,7); ctx.fill(); });
   ctx.fillStyle = "#5f6a85"; ctx.font = "10px Inter, sans-serif";
@@ -490,72 +543,83 @@ function drawChart(dates, units){
   if (dates.length>1) ctx.textAlign="right", ctx.fillText(String(dates[dates.length-1]).slice(5,10), padL+w, cv.height-6);
 }
 
-async function init(){
-  try{
-    const [o, prods, custs] = await Promise.all([
-      api("/api/overview"), api("/api/products"), api("/api/customers")]);
-    const products = prods.slice(0,12);
-    ["prices-product","neg-product","rl-product","chart-product"]
-      .forEach(id => fill(id, products));
-    fill("neg-customer", custs.slice(0,20));
+async function loadChart(){
+  const s = await dataApi("/api/sales/" + $("chart-product").value);
+  drawChart(s.dates, s.units_sold);
+}
 
-    const stats = $("stats"); stats.innerHTML = "";
-    stats.append(
-      statCard("Products", o.products),
-      statCard("Customers", o.customers),
-      statCard("Sales rows", fmt(o.total_sales_rows)),
-      statCard("Sales (30d)", fmt(o.sales_last_30d)),
-      statCard("Avg daily units", fmt(o.avg_daily_units)),
-      statCard("Avg price", "$"+fmt(o.avg_price)),
-    );
+window.PricingDashboard = {
+  refreshAll: async function(){
+    try{
+      const [o, prods, custs] = await Promise.all([
+        dataApi("/api/overview"), dataApi("/api/products"), dataApi("/api/customers")]);
+      const products = prods.slice(0,20);
+      ["prices-product","neg-product","rl-product","chart-product"]
+        .forEach(id => fill(id, products));
+      fill("neg-customer", custs.slice(0,20));
 
-    const mm = o.model_metrics && o.model_metrics.models;
-    if (mm){
-      const back = o.model_backbone;
-      const m = mm[back];
-      $("metrics").insertAdjacentHTML("beforeend",
-        `<div class="row"><span>Backbone &amp; metric</span><b>${back.toUpperCase()}</b></div>`);
-      if (m) $("metrics").insertAdjacentHTML("beforeend",
-        `<div class="row"><span>R²</span><b>${fmt(m.r2)}</b></div>` +
-        `<div class="row"><span>MAE (units)</span><b>${fmt(m.mae)}</b></div>` +
-        `<div class="row"><span>RMSE (units)</span><b>${fmt(m.rmse)}</b></div>`);
-      const mb = $("metricbars"); mb.innerHTML = "";
-      Object.keys(mm).forEach(k => {
-        const r2 = mm[k].r2;
-        mb.appendChild(bar(k, Math.round(r2*100),
-          `R² ${fmt(r2)}`));
-      });
+      const stats = $("stats"); stats.innerHTML = "";
+      stats.append(
+        statCard("Products", o.products),
+        statCard("Customers", o.customers),
+        statCard("Sales rows", fmt(o.total_sales_rows)),
+        statCard("Sales (30d)", fmt(o.sales_last_30d)),
+        statCard("Avg daily units", fmt(o.avg_daily_units)),
+        statCard("Avg price", "$"+fmt(o.avg_price)),
+      );
+
+      const mm = o.model_metrics && o.model_metrics.models;
+      if (mm){
+        const back = o.model_backbone;
+        const m = mm[back];
+        $("metrics").innerHTML =
+          `<div class="row"><span>Backbone &amp; metric</span><b>${back.toUpperCase()}</b></div>` +
+          (m ? `<div class="row"><span>R²</span><b>${fmt(m.r2)}</b></div>` +
+            `<div class="row"><span>MAE (units)</span><b>${fmt(m.mae)}</b></div>` +
+            `<div class="row"><span>RMSE (units)</span><b>${fmt(m.rmse)}</b></div>` : "");
+        const mb = $("metricbars"); mb.innerHTML = "";
+        Object.keys(mm).forEach(k => {
+          const r2 = mm[k].r2;
+          mb.appendChild(bar(k, Math.round(r2*100), `R² ${fmt(r2)}`));
+        });
+      }
+
+      $("chart-product").onchange = loadChart;
+      await loadChart();
+    }catch(e){
+      $("health").textContent = "Backend unavailable — demo powered by local simulation";
+      $("health").className = "pill dim";
+      $("metrics").innerHTML = `<div class="row"><span>Status</span><b>Demo / simulated</b></div>`;
     }
+  },
+};
 
-    const loadChart = async () => {
-      const s = await api("/api/sales/" + $("chart-product").value);
-      drawChart(s.dates, s.units_sold);
-    };
-    $("chart-product").onchange = loadChart;
-    await loadChart();
-  }catch(e){
-    $("health").textContent = "Backend unavailable — demo powered by local simulation";
-    $("health").className = "pill dim";
-    $("metrics").innerHTML = `<div class="row"><span>Status</span><b>Demo / simulated</b></div>`;
-  }
+async function init(){
+  await window.PricingDashboard.refreshAll();
 }
 
 async function health(){
+  const pill = $("health");
+  if (window.PricingData && window.PricingData.active()){
+    pill.textContent = "Uploaded dataset · client model";
+    pill.className = "pill ok";
+    return;
+  }
   try{
-    const h = await api("/api/health");
-    const p = $("health");
+    const h = await dataApi("/api/health");
     if (DEMO){
-      p.textContent = "Demo mode · simulated data"; p.className = "pill dim";
+      pill.textContent = "Demo mode · simulated data"; pill.className = "pill dim";
     }else{
-      p.textContent = h.models_ready ? "Models ready · live API" : "Models not trained";
-      p.className = "pill " + (h.models_ready ? "ok" : "bad");
+      pill.textContent = h.models_ready ? "Models ready · live API" : "Models not trained";
+      pill.className = "pill " + (h.models_ready ? "ok" : "bad");
     }
-  }catch(_){ $("health").textContent = "Offline"; }
+  }catch(_){ pill.textContent = "Offline"; }
 }
+window.updateHealthPill = health;
 
 $("btn-price").onclick = async () => {
   try{
-    const r = await api("/api/price", {
+    const r = await dataApi("/api/price", {
       product_id: $("prices-product").value,
       inventory: +$("prices-inv").value || 50,
       competitor_price: $("prices-competitor").value ? +$("prices-competitor").value : null,
@@ -573,7 +637,7 @@ $("btn-price").onclick = async () => {
 
 $("btn-neg").onclick = async () => {
   try{
-    const r = await api("/api/negotiate", {
+    const r = await dataApi("/api/negotiate", {
       customer_id: $("neg-customer").value, product_id: $("neg-product").value,
       max_budget: $("neg-budget").value ? +$("neg-budget").value : null,
       demand_pressure: clamp(+$("neg-pressure").value || 0.5, 0, 1), inventory: 50 });
@@ -589,7 +653,7 @@ $("btn-neg").onclick = async () => {
 
 $("btn-rl").onclick = async () => {
   try{
-    const r = await api("/api/rl-price", {
+    const r = await dataApi("/api/rl-price", {
       product_id: $("rl-product").value,
       inventory: +$("rl-inv").value || 50,
       demand_pressure: clamp(+$("rl-pressure").value || 0.5, 0, 1),
@@ -607,6 +671,14 @@ $("btn-rl").onclick = async () => {
 init();
 health();
 </script>
+<script src="charts.js"></script>
+<script src="engine.js"></script>
+<script src="analytics.js"></script>
+<script src="upload.js"></script>
 <script src="assistant.js"></script>
+<script>
+window.PricingAnalytics && window.PricingAnalytics.mount();
+window.PricingUI && window.PricingUI.boot();
+</script>
 </body>
 </html>

@@ -609,6 +609,10 @@ if (typeof document !== "undefined") {
     const $ = (id) => document.getElementById(id);
 
     async function buildD() {
+      if (typeof window !== "undefined" && window.PricingData && window.PricingData.assistantBundle) {
+        const b = window.PricingData.assistantBundle();
+        if (b) return b;
+      }
       const [pd, cd, ins, overview] = await Promise.all([
         api("/api/products/detail"), api("/api/customers/detail"),
         api("/api/insights"), api("/api/overview")]);
@@ -825,5 +829,16 @@ if (typeof document !== "undefined") {
         addMsg("bot", "Could not load assistant data: " + esc(e && e.message ? e.message : String(e)));
       }
     })();
+
+    /* Reloadable bootstrap so the assistant picks up an uploaded dataset. */
+    if (typeof window !== "undefined") {
+      window.PricingAssistant = {
+        reload: function () {
+          D = null;
+          chat.innerHTML = "";
+          return init();
+        },
+      };
+    }
   })();
 }
