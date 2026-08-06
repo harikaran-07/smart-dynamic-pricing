@@ -741,20 +741,22 @@ if (typeof document !== "undefined") {
     }
     psel.onchange = () => { updateHint(); };
 
-    // manual form fill
-    const catSel = $("m-category");
-    catSel.innerHTML = "";
-    (D.products || []).forEach(p => {
-      if (!Array.prototype.find.call(catSel.options, o => o.value === p.category))
-        catSel.add(new Option(p.category, p.category));
-    });
-    if (!catSel.options.length) catSel.add(new Option("General", "General"));
-    const msel = $("m-month"), dsel = $("m-dow");
-    AICore.monthNames.forEach((m, i) => msel.add(new Option(m, i + 1)));
-    msel.value = String(new Date().getMonth() + 1);
-    const dw = ["Mon","Tue","Wed","Thu","Fri","Sat","Sun"];
-    dw.forEach((d, i) => dsel.add(new Option(d, i)));
-    dsel.value = "5";
+    // manual form fill (populated once data is loaded in init())
+    function fillManualForm() {
+      const catSel = $("m-category");
+      catSel.innerHTML = "";
+      (D.products || []).forEach(p => {
+        if (!Array.prototype.find.call(catSel.options, o => o.value === p.category))
+          catSel.add(new Option(p.category, p.category));
+      });
+      if (!catSel.options.length) catSel.add(new Option("General", "General"));
+      const msel = $("m-month"), dsel = $("m-dow");
+      AICore.monthNames.forEach((m, i) => msel.add(new Option(m, i + 1)));
+      msel.value = String(new Date().getMonth() + 1);
+      const dw = ["Mon","Tue","Wed","Thu","Fri","Sat","Sun"];
+      dw.forEach((d, i) => dsel.add(new Option(d, i)));
+      dsel.value = "5";
+    }
 
     function readManual() {
       return {
@@ -809,6 +811,7 @@ if (typeof document !== "undefined") {
       try {
         D = await buildD();
         fillProducts();
+        fillManualForm();
         const ms = D.insights && D.insights.monthly_sales;
         const peak = ms && AICore.highestMonth(D);
         addMsg("bot",

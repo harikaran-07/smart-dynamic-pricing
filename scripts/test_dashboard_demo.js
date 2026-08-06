@@ -122,5 +122,96 @@ const fakeD = {
   assert(manual.intent === "manual_predict" && manual.answer && manual.confidencePct === 70, "manual predict reply");
   const whatif = await AICore.answer("What if inventory drops to 20?", "dataset", {}, fakeD);
   assert(whatif.intent === "whatif" && /profit|demand/i.test(whatif.answer), "what-if scenario reply");
+})();
+
+// ---- 3. browser bootstrap: run assistant.js's UI IIFE against a DOM shim --
+(async () => {
+  console.log("== assistant.js browser bootstrap (DOM shim) ==");
+  const sleep = (ms) => new Promise(r => setTimeout(r, ms));
+  class El {
+    constructor(tag) {
+      this.tagName = tag; this.children = []; this.style = {}; this.options = [];
+      this._innerHTML = ""; this.onclick = null; this.onchange = null; this.onkeydown = null;
+      this.value = ""; this.textContent = ""; this.disabled = false; this.className = "";
+      this.checked = false; this.scrollTop = 0; this.scrollHeight = 0;
+      this.classList = { add() {}, remove() {}, toggle() {} };
+    }
+    get innerHTML() { return this._innerHTML; }
+    set innerHTML(v) { this._innerHTML = String(v); }
+    appendChild(c) { if (c) { c._parent = this; this.children.push(c); } return c; }
+    remove() { if (this._parent) { const i = this._parent.children.indexOf(this); if (i >= 0) this._parent.children.splice(i, 1); } }
+    add(o) { this.options.push(o); }
+    focus() {}
+    closest(sel) {
+      const cls = String(this.className || "").split(/\s+/);
+      return cls.includes(sel.replace(/^\./, "")) ? this : null;
+    }
+    addEventListener() {}
+  }
+  const els = {};
+  const doc = {
+    head: { appendChild() {} },
+    getElementById(id) { if (!els[id]) els[id] = new El("div"); return els[id]; },
+    createElement(t) { return new El(t); },
+    addEventListener() {},
+    querySelector() { return new El("div"); },
+    body: new El("body"),
+  };
+  const Option = function (text, value) { this.text = text; this.value = value; };
+
+  // api shim backed by the demo endpoints extracted from index.html
+  const apiShim = async (path, body) => D.demoApi(path, body);
+
+  // run assistant.js in a fresh scope where the IIFE bootstraps
+  const src = fs.readFileSync(path.join(ROOT, "dashboard", "assistant.js"), "utf8");
+  let bootError = null;
+  try {
+    new Function("document", "window", "api", "Option", src)(doc, {}, apiShim, Option);
+  } catch (e) {
+    bootError = e;
+  }
+  assert(!bootError, "assistant.js IIFE bootstraps without throwing" + (bootError ? " — " + bootError.message : ""));
+
+  await sleep(60); // let init() buildD + welcome message resolve
+
+  assert(typeof els["ai-tab-manual"].onclick === "function", "Manual tab handler attached");
+  assert(typeof els["ai-tab-dataset"].onclick === "function", "Dataset tab handler attached");
+  assert(typeof els["ai-send"].onclick === "function", "Send handler attached");
+  assert(typeof els["ai-predict"].onclick === "function", "Predict handler attached");
+  assert(typeof els["ai-ds-chips"].onclick === "function", "Chips handler attached");
+  assert(els["ai-chat"].children.length >= 1, "welcome message rendered (" + els["ai-chat"].children.length + " msgs)");
+  assert(els["m-category"].options.length > 0, "manual category populated (" + els["m-category"].options.length + " cats)");
+  assert(els["m-month"].options.length === 12, "manual month populated (12)");
+
+  // switch to Manual mode
+  els["ai-tab-manual"].onclick();
+  assert(els["ai-pane-manual"].style.display === "" && els["ai-pane-dataset"].style.display === "none",
+    "switching to Manual mode shows the manual pane");
+
+  // dataset question through the chat
+  const before = els["ai-chat"].children.length;
+  els["ai-input"].value = "Forecast next 30 days";
+  els["ai-send"].onclick();
+  await sleep(60);
+  const bots = els["ai-chat"].children.filter(m => String(m.className).includes("bot"));
+  const bot = bots[bots.length - 1];
+  if (!(els["ai-chat"].children.length > before && bot && /Reasoning|Answer/.test(bot.innerHTML))) {
+    console.error("  [debug] chat children:\n" + els["ai-chat"].children.map(c => String(c.className) + " :: " + String(c.innerHTML).slice(0, 90)).join("\n"));
+  }
+  assert(els["ai-chat"].children.length > before && bot && /Reasoning|Answer/.test(bot.innerHTML),
+    "dataset chat question produces a 5-part bot reply");
+
+  // manual predict
+  doc.getElementById("m-price").value = "49.99"; doc.getElementById("m-cost").value = "22";
+  doc.getElementById("m-inv").value = "50"; doc.getElementById("m-comp").value = "55";
+  doc.getElementById("m-pressure").value = "0.5";
+  const n0 = els["ai-chat"].children.length;
+  els["ai-predict"].onclick();
+  await sleep(60);
+  const bots2 = els["ai-chat"].children.filter(m => String(m.className).includes("bot"));
+  const last = bots2[bots2.length - 1];
+  assert(els["ai-chat"].children.length > n0 && /Answer|Reasoning/.test(String(last.innerHTML)),
+    "Manual predict posts a structured reply");
+
   process.exit(fails ? 1 : 0);
 })();
