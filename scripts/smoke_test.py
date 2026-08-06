@@ -19,3 +19,23 @@ print("price:", json.dumps(r.json()))
 r2 = c.post("/api/negotiate", json={"customer_id": "c-102", "product_id": "P001", "demand_pressure": 0.7, "inventory": 20})
 print("negotiate:", r2.status_code, json.dumps(r2.json()))
 print("404 check:", c.post("/api/price", json={"product_id": "ZZZ", "inventory": 5}).status_code)
+
+# assistant endpoints
+pd_ = c.get("/api/products/detail").json()
+print("products/detail:", len(pd_), "rows; first:", pd_[0])
+cd_ = c.get("/api/customers/detail").json()
+print("customers/detail:", len(cd_), "rows; first segment:", cd_[0]["segment_label"])
+ins = c.get("/api/insights").json()
+print("insights keys:", sorted(ins.keys()))
+print("insights best_month:", ins["best_month"], "| top profit:", ins["top_profit"][:2])
+m = c.post("/api/manual", json={
+    "product_name": "Wireless Headphones", "category": "Electronics",
+    "price": 49.99, "cost": 22.0, "inventory": 50, "competitor": 55.0,
+    "discount_pct": 10, "demand_pressure": 0.5, "marketing_spend": 120,
+    "customer_rating": 4.2, "season": "Festival", "holiday": True,
+    "weekend": 1, "month": 10, "dow": 5,
+})
+mj = m.json()
+print("manual:", m.status_code, "confidence", mj["confidence_pct"], "| optimal", mj["optimal"], "| impacts", mj["feature_impacts"][:2])
+print("manual discount_grid:", mj["discount_grid"])
+print("assistant.js served:", c.get("/assistant.js").status_code)

@@ -14,6 +14,9 @@ customer segmentation and an AI negotiation agent.
 - **AI Negotiation Agent** — simulates a customer-agent bargain and returns a personalized discount
   based on loyalty, purchase history, demand pressure and a "churn risk" willingness-to-buy.
 - **REST API (FastAPI)** with live price recommendation and negotiation endpoints.
+- **AI Pricing Assistant** — an in-dashboard chat (Dataset + Manual modes) that answers
+  pricing, demand, profit, segmentation, seasonal, inventory, RL and ML questions in a
+  structured Answer / Reasoning / Business Impact / Recommended Action / Confidence format.
 - **Dashboard** — a lightweight HTML/JS monitor (served by the API) for price changes vs sales.
 
 ## Tech stack
@@ -66,8 +69,10 @@ segmentation.py    # K-Means + loyalty scoring
 scripts/
   run.ps1              # start the API on Windows
   smoke_test.py        # quick API verification
+  test_dashboard_demo.js  # Node harness for demo endpoints + assistant engine
 dashboard/
   index.html           # monitor dashboard (served by the API)
+  assistant.js         # AI Pricing Assistant engine + UI
 ```
 
 ## API examples
@@ -93,6 +98,16 @@ curl -X POST http://127.0.0.1:8000/api/negotiate \
 curl -X POST http://127.0.0.1:8000/api/rl-price \
   -H "Content-Type: application/json" \
   -d '{"product_id":"P001","inventory":43,"demand_pressure":0.6}'
+
+# assistant data endpoints
+curl http://127.0.0.1:8000/api/products/detail
+curl http://127.0.0.1:8000/api/customers/detail
+curl http://127.0.0.1:8000/api/insights
+
+# manual-mode prediction (no dataset product needed)
+curl -X POST http://127.0.0.1:8000/api/manual \
+  -H "Content-Type: application/json" \
+  -d '{"product_name":"Wireless Headphones","category":"Electronics","price":49.99,"cost":22.0,"inventory":50,"competitor":55.0,"discount_pct":10,"demand_pressure":0.5,"marketing_spend":120,"customer_rating":4.2,"season":"Festival","holiday":true,"weekend":1,"month":10,"dow":5}'
 ```
 
 Dashboard: open `http://127.0.0.1:8000/` for live price recommendations, AI negotiation,
@@ -103,7 +118,14 @@ model performance and a sales-history chart. Interactives: Swagger at `/docs`.
 The dashboard auto-detects whether the FastAPI backend is reachable. When it is not
 (e.g. when the page is served as a static site from GitHub Pages), it falls back to a
 self-contained **demo mode** that simulates all endpoints (`/api/price`, `/api/negotiate`,
-`/api/rl-price`, `/api/overview`, `/api/sales/*`) in the browser — no backend required.
+`/api/rl-price`, `/api/overview`, `/api/sales/*`, `/api/manual`, `/api/insights`,
+`/api/products/detail`, `/api/customers/detail`) in the browser — no backend required.
+The **AI Pricing Assistant** works in both modes. Verify the demo endpoints + assistant
+engine with the Node harness:
+
+```bash
+node scripts/test_dashboard_demo.js
+```
 
 To publish: push this repo, enable **Settings → Pages** (deploy from the `main` branch,
 root `/`), then open `https://<user>.github.io/smart-dynamic-pricing/`.
