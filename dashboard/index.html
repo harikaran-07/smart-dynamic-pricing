@@ -211,6 +211,11 @@ const fmt = n => (n == null ? "—" : Number(n).toLocaleString(undefined,{maximu
 let DEMO = false;
 
 async function api(path, body) {
+  if (window.location.protocol === "file:") {
+    DEMO = true;
+    path = path.replace(/^\.\//, "/");
+    return demoApi(path, body);
+  }
   const ctrl = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), 4000);
   try {
