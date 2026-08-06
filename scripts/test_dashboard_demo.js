@@ -1,0 +1,126 @@
+/* Node harness that verifies:
+ *  1. the inline demoAPI (extracted from dashboard/index.html) serves the new
+ *     assistant endpoints (products/detail, customers/detail, insights, manual);
+ *  2. the AICore engine returns well-formed 5-part answers for many intents.
+ */
+"use strict";
+const fs = require("fs");
+const path = require("path");
+const { AICore } = require(path.join(__dirname, "..", "dashboard", "assistant.js"));
+const ROOT = path.resolve(__dirname, "..");
+const indexHtml = fs.readFileSync(path.join(ROOT, "dashboard", "index.html"), "utf8");
+
+let fails = 0;
+function assert(cond, msg) {
+  if (!cond) { console.error("  ✗ " + msg); fails++; }
+  else console.log("  ✓ " + msg);
+}
+
+// ---- extract the inline script (before assistant.js tag) --------------
+const start = indexHtml.indexOf("<script>") + "<script>".length;
+const end = indexHtml.indexOf("</script>", start);
+let inline = indexHtml.slice(start, end);
+inline = inline.replace(/^\s*init\(\);\s*health\(\);\s*$/m, ""); // don't run DOM boot
+
+// ---- build a sandbox with the constants/functions we need -------------
+const elProxy = new Proxy({}, {
+  get(t, p) { if (typeof p === "string" && p !== "then") return () => ({}); return undefined; },
+  set() { return true; },
+  has() { return true; },
+});
+globalThis.document = {
+  getElementById: () => elProxy, querySelector: () => elProxy, createElement: () => elProxy,
+  head: { appendChild: () => {} }, addEventListener: () => {}, body: elProxy,
+};
+globalThis.window = globalThis;
+const sandbox = {};
+const fn = new Function(
+  "module",
+  inline + "\n;globalThis.__demo = { DEMO_PRODUCTS, DEMO_CUSTOMERS, demoApi, demoProduct, demoCustomer, mulberry, clamp };"
+);
+fn(sandbox);
+const D = globalThis.__demo;
+
+// ---- 1. new demo endpoints ---------------------------------------------
+(async () => {
+  console.log("demo endpoints (products/detail, customers/detail, insights, manual)");
+  const pd = await D.demoApi("/api/products/detail");
+  assert(Array.isArray(pd) && pd.length && pd[0].base_price > 0 && pd[0].cost > 0, "products/detail returns product rows");
+  const cd = await D.demoApi("/api/customers/detail");
+  assert(Array.isArray(cd) && cd.every(c => c.segment_label && c.loyalty_tier), "customers/detail returns segments");
+  const ins = await D.demoApi("/api/insights");
+  assert(ins.top_profit && ins.top_profit.length && ins.monthly_sales && ins.best_month, "insights aggregates present");
+  assert(ins.low_stock && ins.overstock && Array.isArray(ins.inventory), "insights inventory flags present");
+  const man = await D.demoApi("/api/manual", { price: 49.99, cost: 22, inventory: 50, demand_pressure: 0.5 });
+  assert(man.current && man.current.revenue > 0 && man.current.price > 0, "manual returns current scenario");
+  assert(man.optimal && man.optimal.recommended_price > 0 && typeof man.optimal.price_delta_pct === "number", "manual returns optimal");
+  assert(Array.isArray(man.discount_grid) && man.discount_grid.length === 5 && man.discount_grid.every(x => x.discount != null), "manual discount_grid has 5 entries");
+  assert(Array.isArray(man.feature_impacts) && man.feature_impacts.length >= 3, "manual feature impacts present");
+  assert(Number.isInteger(man.confidence_pct) && man.confidence_pct >= 0, "manual confidence_pct is an integer");
+})();
+
+// ---- 2. AICore engine ----------------------------------------------------
+const fakeD = {
+  currency: "$",
+  products: [
+    { product_id: "P001", base_price: 146.9, cost: 63.24, category: "Electronics" },
+    { product_id: "P010", base_price: 120.0, cost: 58.0, category: "Home & Kitchen" },
+    { product_id: "P015", base_price: 49.9, cost: 23.0, category: "Sports" },
+  ],
+  customers: [{ customer_id: "c-001", loyalty_score: 88, purchase_count: 34, avg_sales: 8.9, segment_label: "Premium", loyalty_tier: "Gold" }],
+  overview: { model_backbone: "xgboost", model_metrics: { models: { linear: { r2: .54 }, xgboost: { r2: .668 } } } },
+  insights: {
+    product_count: 3,
+    top_profit: [{ product_id: "P001", profit: 48000 }],
+    top_revenue: [{ product_id: "P001", revenue: 90000 }],
+    best_revenue_category: { name: "Electronics", revenue: 90000 },
+    best_profit_category: { name: "Electronics", profit: 48000 },
+    monthly_sales: { 1: 100, 9: 200, 10: 400, 11: 500, 12: 300 },
+    best_month: 11, weekday_units: 31.4, weekend_units: 40.7,
+    inventory: [{ product_id: "P001", inventory: 5, avg_daily: 30, days_left: 0.16 }],
+    low_stock: [{ product_id: "P001", inventory: 5, avg_daily: 30, days_left: 0.16 }],
+    overstock: [{ product_id: "P002", inventory: 400, avg_daily: 3, days_left: 133 }],
+    segments: { Regular: 1, Loyal: 1, "Bargain seeker": 1, Premium: 1 },
+    trend_products: { P001: 214 },
+  },
+  price: async (r) => ({ product_id: r.product_id, recommended_price: 130.5, cost: 58, expected_demand: 34.5, expected_revenue: 4502.25, competitor_price: 120, inventory: 50 }),
+  rl: async () => ({ action_index: 2, action_multiplier: 1.0, price: 120, product_state: { inventory: 50, demand_pressure: 0.5, competitor_gap: 0.08 }, q_values: [9000,12000,15000,11000,8000], learning_steps: 2000 }),
+  manual: async (f) => { const d = f.discount_pct || 0; const eff = f.price * (1 - d / 100); return {
+    input: f, current: { price: eff, demand: 30, revenue: eff * 30, profit: (eff - f.cost) * 30, margin_pct: 55 },
+    optimal: { recommended_price: eff * .95, demand: 32, revenue: eff * .95 * 32, profit: (eff * .95 - f.cost) * 32, price_delta_pct: -5 },
+    discount_grid: [], feature_impacts: [{ feature: "price", impact_pct: -6 }, { feature: "weekend", impact_pct: 8 }], confidence_pct: 70 } },
+  negotiate: async () => ({}),
+  sales: async () => ({ dates: [], units_sold: [28,30,32,34,36,38,40] }),
+  explain: async () => ({ top_features: ["is_weekend", "units_roll7", "seasonal_factor"] }),
+};
+
+(async () => {
+  console.log("== AICore engine (5-part responses) ==");
+  const checks = [
+    "Why is P010 priced at 800?",
+    "Should I increase the price?",
+    "Forecast next 30 days",
+    "Which products need discounts?",
+    "Which products are running out of stock?",
+    "Which segment should get discounts?",
+    "Which month performs best?",
+    "Why did the RL agent recommend this action?",
+    "Which model performs best?",
+    "Best product to promote",
+    "What if inventory drops to 20?",
+  ];
+  for (const q of checks) {
+    const r = await AICore.answer(q, "dataset", { pid: "P001" }, fakeD);
+    const ok = r.answer && r.reasoning && r.businessImpact && r.action && typeof r.confidencePct === "number" && r.confidence;
+    assert(ok, `intent "${r.intent}" replies for: "${q}"`);
+    if (!ok) console.error(JSON.stringify(r, null, 2).slice(0, 400));
+  }
+  const comp = await AICore.answer("Compare P010 with P015", "dataset", {}, fakeD);
+  assert(comp.intent === "compare" && /P010/.test(comp.answer) && /P015/.test(comp.answer), "compare two products");
+  const manual = await AICore.answer("Recommend the best price for maximum profit", "manual",
+    { manual: { price: 49.99, cost: 22, inventory: 50, demand_pressure: 0.5, competitor: 55 } }, fakeD);
+  assert(manual.intent === "manual_predict" && manual.answer && manual.confidencePct === 70, "manual predict reply");
+  const whatif = await AICore.answer("What if inventory drops to 20?", "dataset", {}, fakeD);
+  assert(whatif.intent === "whatif" && /profit|demand/i.test(whatif.answer), "what-if scenario reply");
+  process.exit(fails ? 1 : 0);
+})();

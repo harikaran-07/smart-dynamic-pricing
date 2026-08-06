@@ -195,6 +195,9 @@
     </div>
   </section>
 
+  <h2 class="sec">AI Pricing Assistant</h2>
+  <div id="assistant-root"></div>
+
   <footer>
     Smart Dynamic Pricing System — ML-driven price optimization with demand forecasting,
     customer segmentation, reinforcement learning &amp; an AI negotiation agent.
@@ -294,6 +297,77 @@ async function demoApi(path, body){
   if (p === "health") return { status:"ok", models_ready:false };
   if (p === "products") return DEMO_PRODUCTS.map(x=>x[0]);
   if (p === "customers") return DEMO_CUSTOMERS.map(x=>x[0]);
+  if (p === "products/detail") return DEMO_PRODUCTS.map(x => ({
+    product_id:x[0], base_price:x[1], cost:x[2], category:x[3] }));
+  if (p === "customers/detail") return DEMO_CUSTOMERS.map(x => ({
+    customer_id:x[0], loyalty_score:x[1], purchase_count:x[2], avg_sales:x[3],
+    segment_label:x[4], loyalty_tier:x[5], region:["North","West","South","East"][(+x[0].slice(2))%4],
+    preferred_category: DEMO_PRODUCTS[(+x[0].slice(2))%DEMO_PRODUCTS.length][3] }));
+  if (p === "insights"){
+    const inv = DEMO_PRODUCTS.map((x,i) => {
+      const avg = 22 + ((i*3)%24);
+      const s = 40 + ((i*53)%230);
+      return { product_id:x[0], inventory:s, avg_daily:avg,
+        days_left: Math.round(s/avg*10)/10,
+        revenue: x[1]*avg*30, profit: (x[1]-x[2])*avg*30 };
+    });
+    const byRev = inv.slice().sort((a,b)=>b.revenue-a.revenue);
+    const byProf = inv.slice().sort((a,b)=>b.profit-a.profit);
+    const cats = {};
+    inv.forEach(x=>{ const c=DEMO_PRODUCTS.find(q=>q[0]===x.product_id)[3];
+      cats[c]=(cats[c]||0)+x.revenue; });
+    const bestCat = Object.entries(cats).sort((a,b)=>b[1]-a[1])[0];
+    return {
+      product_count: DEMO_PRODUCTS.length,
+      top_revenue: byRev.slice(0,5).map(x=>({product_id:x.product_id,revenue:Math.round(x.revenue),profit:Math.round(x.profit)})),
+      top_profit: byProf.slice(0,5).map(x=>({product_id:x.product_id,revenue:Math.round(x.revenue),profit:Math.round(x.profit)})),
+      best_revenue_category:{name:bestCat[0], revenue:Math.round(bestCat[1])},
+      best_profit_category:{name:bestCat[0], profit:Math.round(bestCat[1]*0.5)},
+      monthly_sales:{1:1400,2:1520,3:1680,4:1750,5:1620,6:1410,7:1290,8:1350,9:1590,10:2100,11:2380,12:1960},
+      best_month:11, weekday_units:31.4, weekend_units:40.7,
+      monthly_sales_inv: inv.filter(x=>x.days_left<7),
+      low_stock: inv.filter(x=>x.days_left<7).slice(0,5).map(x=>({product_id:x.product_id,inventory:x.inventory,avg_daily:x.avg_daily,days_left:x.days_left})),
+      overstock: inv.filter(x=>x.days_left>60).slice(0,5).map(x=>({product_id:x.product_id,inventory:x.inventory,avg_daily:x.avg_daily,days_left:x.days_left})),
+      inventory: inv.sort((a,b)=>a.days_left-b.days_left).slice(0,8).map(x=>({product_id:x.product_id,inventory:x.inventory,avg_daily:x.avg_daily,days_left:x.days_left})),
+      trend_products: {P001:214,P006:120,P010:98,P004:-60,P008:-112,P002:-204},
+      segments:{ Regular:646, Loyal:645, "Bargain seeker":402, Premium:307 },
+    };
+  }
+  if (p === "manual"){
+    const b = body;
+    const comp = b.competitor || b.price;
+    const press = b.demand_pressure != null ? b.demand_pressure : 0.5;
+    const inv = b.inventory != null ? b.inventory : 50;
+    const eff = b.price * (1 - (b.discount_pct||0)/100);
+    const rawD = 18 + 24*press + (comp-eff)*0.05;
+    const demand = Math.max(0, Math.min(+rawD.toFixed(1), inv));
+    const revenue = Math.round(eff*demand*100)/100;
+    const profit = Math.round((eff-b.cost)*demand*100)/100;
+    const rec = Math.round(eff*(0.88-0.05*press)*100)/100;
+    const optDemand = Math.max(0, Math.min(18+24*press, inv));
+    const grid = [0,5,10,15,20];
+    return {
+      input: b,
+      current:{ price:+eff.toFixed(2), demand, revenue, profit,
+        margin_pct: eff>0?Math.round((eff-b.cost)/eff*1000)/10:0 },
+      optimal:{ recommended_price:rec,
+        demand:Math.round(optDemand*10)/10,
+        revenue:Math.round(rec*optDemand*100)/100,
+        profit:Math.round((rec-b.cost)*optDemand*100)/100,
+        price_delta_pct: +(((rec-eff)/eff)*100).toFixed(1) },
+      discount_grid: grid.map(d => ({
+        discount:d, price:Math.round(b.price*(1-d/100)*100)/100,
+        demand:Math.max(0, Math.min(Math.round((18+24*press+(comp-b.price*(1-d/100))*0.05)*10)/10, inv))})),
+      feature_impacts: [
+        { feature:"price", label:"raising price 10%", impact_pct:-6.4 },
+        { feature:"competitor_price", label:"competitor +10%", impact_pct:+5.1 },
+        { feature:"inventory", label:"stock +50%", impact_pct:+1.2 },
+        { feature:"weekend", label:"weekday → weekend", impact_pct:+7.8 },
+      ],
+      confidence_pct: b.price > 0 && b.cost > 0 ? 72 : 35,
+      currency:"USD",
+    };
+  }
   if (p.startsWith("sales/")){
     const pid = p.slice(6);
     const days = (body && body.days) || 30;
@@ -528,5 +602,6 @@ $("btn-rl").onclick = async () => {
 init();
 health();
 </script>
+<script src="assistant.js"></script>
 </body>
 </html>
