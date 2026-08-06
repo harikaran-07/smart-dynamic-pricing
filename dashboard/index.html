@@ -3,69 +3,167 @@
 <head>
 <meta charset="utf-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1"/>
-<title>Smart Dynamic Pricing Dashboard</title>
+<title>Smart Dynamic Pricing — Control Center</title>
 <style>
-  :root{--bg:#0f1420;--card:#171e2e;--line:#263049;--txt:#e7ecf5;--mut:#8b95ab;
-        --acc:#4f8cff;--ok:#3ddc97;--bad:#ff5470}
+  :root{
+    --bg:#0b1020; --bg-2:#0f1628; --card:#141c30; --card-2:#182238;
+    --line:#22304e; --txt:#e8edf7; --mut:#93a0ba; --faint:#6b7a99;
+    --acc:#5b8cff; --acc-2:#8b5cf6; --ok:#34d399; --warn:#fbbf24; --bad:#f87171;
+    --rad:14px; --shadow:0 10px 30px rgba(0,0,0,.35);
+  }
   *{box-sizing:border-box}
-  body{margin:0;font-family:system-ui,Segoe UI,Roboto,sans-serif;background:var(--bg);color:var(--txt)}
-  header{padding:18px 24px;display:flex;justify-content:space-between;align-items:center;
-         border-bottom:1px solid var(--card);background:var(--card)}
-  header h1{font-size:18px;margin:0}
-  .pill{background:var(--line);padding:4px 10px;border-radius:20px;font-size:12px}
-  .pill.ok{color:var(--ok)} .pill.bad{color:var(--bad)}
-  main{padding:20px;display:grid;gap:18px}
-  .row{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:18px}
-  .stats{grid-template-columns:repeat(auto-fit,minmax(150px,1fr))}
-  .card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:18px}
-  .card h2{margin:0 0 14px;font-size:15px;color:var(--acc)}
-  .stat .k{font-size:12px;color:var(--mut)} .stat .v{font-size:22px;font-weight:700;margin-top:2px}
-  label{display:block;font-size:12px;color:var(--mut);margin:10px 0 4px}
-  input,select{width:100%;padding:9px;border-radius:8px;border:1px solid var(--line);background:#0b1019;color:var(--txt)}
-  button{width:100%;padding:10px;margin-top:14px;border:0;border-radius:8px;background:var(--acc);color:#fff;font-weight:600;cursor:pointer}
-  .result{background:#0d1320;border:1px solid var(--line);border-radius:8px;padding:12px;margin-top:14px;font-size:13px;white-space:pre-wrap}
-  canvas{width:100%;height:200px;background:#0b1019;border:1px solid var(--line);border-radius:8px;margin-top:10px}
+  html,body{margin:0;height:100%}
+  body{background:
+     radial-gradient(1100px 500px at 12% -10%, rgba(91,140,255,.18), transparent 60%),
+     radial-gradient(900px 480px at 100% 0%, rgba(139,92,246,.16), transparent 55%),
+     var(--bg);
+    color:var(--txt);
+    font-family:Inter, "Segoe UI", system-ui, -apple-system, Roboto, sans-serif;
+    -webkit-font-smoothing:antialiased;}
+  a{color:var(--acc)}
+  .wrap{max-width:1240px;margin:0 auto;padding:22px 22px 40px}
+
+  header{display:flex;align-items:center;gap:14px;padding:20px 26px;
+    background:rgba(13,18,34,.7);backdrop-filter:blur(10px);
+    border-bottom:1px solid var(--line);position:sticky;top:0;z-index:20}
+  .brand{display:flex;align-items:center;gap:14px}
+  .logo{width:42px;height:42px;border-radius:12px;flex:none;
+    background:linear-gradient(135deg,var(--acc),var(--acc-2));
+    display:grid;place-items:center;color:#fff;font-weight:800;font-size:20px;
+    box-shadow:0 6px 18px rgba(91,140,255,.4)}
+  .brand h1{margin:0;font-size:19px;letter-spacing:.2px}
+  .brand p{margin:2px 0 0;font-size:12px;color:var(--faint)}
+  .spacer{flex:1}
+  .pill{display:inline-flex;align-items:center;gap:7px;padding:7px 14px;border-radius:999px;
+    font-size:12.5px;font-weight:600;border:1px solid var(--line);background:var(--card)}
+  .pill::before{content:"";width:8px;height:8px;border-radius:50%;background:var(--warn)}
+  .pill.ok{color:var(--ok)} .pill.ok::before{background:var(--ok)}
+  .pill.bad{color:var(--bad)} .pill.bad::before{background:var(--bad)}
+  .pill.dim::before{background:var(--faint)}
+
+  h2.sec{font-size:13px;text-transform:uppercase;letter-spacing:1.4px;color:var(--faint);
+    margin:34px 0 14px;display:flex;align-items:center;gap:10px}
+  h2.sec::after{content:"";flex:1;height:1px;background:linear-gradient(90deg,var(--line),transparent)}
+
+  .kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:14px}
+  .kpi{background:linear-gradient(180deg,var(--card),var(--card-2));
+    border:1px solid var(--line);border-radius:var(--rad);padding:16px 18px;
+    position:relative;overflow:hidden;box-shadow:var(--shadow)}
+  .kpi::before{content:"";position:absolute;inset:0 0 auto 0;height:3px;
+    background:linear-gradient(90deg,var(--acc),var(--acc-2))}
+  .kpi .k{font-size:12px;color:var(--mut)}
+  .kpi .v{font-size:24px;font-weight:700;margin-top:6px}
+  .kpi .s{font-size:11px;color:var(--faint);margin-top:2px}
+
+  .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:16px}
+  .card{background:linear-gradient(180deg,var(--card),var(--card-2));
+    border:1px solid var(--line);border-radius:var(--rad);padding:20px;box-shadow:var(--shadow)}
+  .card h3{margin:0 0 4px;font-size:15px;font-weight:700}
+  .card .sub{font-size:12px;color:var(--faint);margin:0 0 14px}
+
+  label{display:block;font-size:12px;color:var(--mut);margin:12px 0 6px;font-weight:600}
+  input,select{width:100%;padding:10px 12px;border-radius:10px;border:1px solid var(--line);
+    background:#0c1220;color:var(--txt);font-size:13.5px;outline:none;transition:.15s}
+  input:focus,select:focus{border-color:var(--acc);box-shadow:0 0 0 3px rgba(91,140,255,.18)}
+  select{cursor:pointer;appearance:none}
+  input[type=number]::-webkit-outer-spin-button,input[type=number]::-webkit-inner-spin-button{-webkit-appearance:none}
+
+  button{width:100%;padding:12px;margin-top:16px;border:0;border-radius:10px;
+    background:linear-gradient(135deg,var(--acc),var(--acc-2));color:#fff;
+    font-weight:700;font-size:13.5px;cursor:pointer;box-shadow:0 8px 20px rgba(91,140,255,.3);
+    transition:.15s}
+  button:hover{filter:brightness(1.08);transform:translateY(-1px)}
+  button:active{transform:translateY(0)}
+  button:disabled{opacity:.5;cursor:not-allowed;transform:none;filter:none}
+
+  .result{margin-top:16px;border:1px solid var(--line);border-radius:12px;
+    background:#0c1220;overflow:hidden}
+  .result.empty{padding:14px;color:var(--faint);font-size:13px}
+  .res-head{display:flex;justify-content:space-between;align-items:center;
+    padding:10px 14px;background:rgba(91,140,255,.08);font-size:12px;font-weight:700;
+    text-transform:uppercase;letter-spacing:.6px;color:var(--acc)}
+  .res-row{display:flex;justify-content:space-between;gap:10px;padding:9px 14px;
+    border-top:1px solid rgba(34,48,80,.55);font-size:13.5px}
+  .res-row .k{color:var(--mut)}
+  .res-row .v{font-weight:650;text-align:right;color:var(--txt)}
+  .res-row .v.hero{font-size:20px;color:var(--ok);font-weight:800}
+  .res-row .v.bad{color:var(--bad)}
+  .badge{display:inline-block;padding:2px 9px;border-radius:999px;font-size:11px;font-weight:700;
+    background:rgba(52,211,153,.14);color:var(--ok);border:1px solid rgba(52,211,153,.3)}
+  .badge.soft{background:rgba(139,92,246,.14);color:var(--acc-2);border-color:rgba(139,92,246,.3)}
+  .badge.warn{background:rgba(251,191,36,.14);color:var(--warn);border-color:rgba(251,191,36,.3)}
+
+  .metrics{font-size:13.5px}
+  .metrics .row{display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid rgba(34,48,80,.5)}
+  .metrics .row:last-child{border-bottom:0}
+  .metrics .row span{color:var(--mut)} .metrics .row b{color:var(--ok)}
+  .metricbar{margin-top:12px}
+  .metricbar .mb{display:flex;justify-content:space-between;font-size:12px;margin:10px 0 4px}
+  .metricbar .mb b{color:var(--txt);font-weight:650}
+  .bar{height:8px;border-radius:5px;background:#1a2540;overflow:hidden}
+  .bar i{display:block;height:100%;background:linear-gradient(90deg,var(--acc),var(--acc-2))}
+
+  .chart-title{display:flex;justify-content:space-between;align-items:center;margin-bottom:10px}
+  canvas{width:100%;height:210px;display:block}
+
+  footer{margin-top:30px;text-align:center;color:var(--faint);font-size:12px;line-height:1.7}
+  .err-box{margin-top:12px;padding:12px 14px;border-radius:10px;background:rgba(248,113,113,.1);
+    border:1px solid rgba(248,113,113,.3);color:var(--bad);font-size:13px}
+  @media (max-width:520px){.brand p{display:none}.wrap{padding:16px 12px 32px}}
 </style>
 </head>
 <body>
 <header>
-  <h1>Smart Dynamic Pricing Dashboard</h1>
-  <span id="health" class="pill">checking…</span>
+  <div class="brand">
+    <div class="logo">$</div>
+    <div>
+      <h1>Smart Dynamic Pricing</h1>
+      <p>AI pricing engine &amp; negotiation control center</p>
+    </div>
+  </div>
+  <div class="spacer"></div>
+  <span id="health" class="pill">checking</span>
 </header>
-<main>
-  <section id="stats" class="row stats"></section>
 
-  <section class="row">
+<div class="wrap">
+  <h2 class="sec">Platform Overview</h2>
+  <section id="stats" class="kpis"></section>
+
+  <h2 class="sec">Decision Engine</h2>
+  <section class="grid">
     <div class="card">
-      <h2>Recommend Price</h2>
+      <h3>Price Recommendation</h3>
+      <p class="sub">Revenue-maximising price from demand model, inventory &amp; competition</p>
       <label>Product ID</label>
       <select id="prices-product"></select>
       <label>Inventory (units)</label>
       <input id="prices-inv" type="number" value="50" min="0"/>
-      <label>Competitor price (optional)</label>
-      <input id="prices-competitor" type="number" step="0.01" placeholder="auto"/>
       <label>Demand pressure (0–1)</label>
       <input id="prices-pressure" type="number" value="0.5" step="0.1" min="0" max="1"/>
-      <button id="btn-price">Get Recommended Price</button>
-      <div id="price-out" class="result">—</div>
+      <label>Competitor price (optional)</label>
+      <input id="prices-competitor" type="number" step="0.01" placeholder="auto"/>
+      <button id="btn-price">Optimize Price</button>
+      <div id="price-out" class="result empty">Run a recommendation to see the suggested price.</div>
     </div>
 
     <div class="card">
-      <h2>AI Negotiation</h2>
+      <h3>AI Negotiation Agent</h3>
+      <p class="sub">Personalised discount based on loyalty, segment, demand &amp; budget</p>
       <label>Customer ID</label>
       <select id="neg-customer"></select>
       <label>Product ID</label>
       <select id="neg-product"></select>
-      <label>Max budget (optional)</label>
-      <input id="neg-budget" type="number" step="0.01" placeholder="e.g. 6.00"/>
       <label>Demand pressure (0–1)</label>
       <input id="neg-pressure" type="number" value="0.5" step="0.1" min="0" max="1"/>
+      <label>Max budget (optional)</label>
+      <input id="neg-budget" type="number" step="0.01" placeholder="e.g. 90.00"/>
       <button id="btn-neg">Run Negotiation</button>
-      <div id="neg-out" class="result">—</div>
+      <div id="neg-out" class="result empty">Start a negotiation session.</div>
     </div>
 
     <div class="card">
-      <h2>RL Price Agent</h2>
+      <h3>RL Price Agent</h3>
+      <p class="sub">Reinforcement-learning price action over the Q-value space</p>
       <label>Product ID</label>
       <select id="rl-product"></select>
       <label>Inventory (units)</label>
@@ -74,25 +172,40 @@
       <input id="rl-pressure" type="number" value="0.5" step="0.1" min="0" max="1"/>
       <label>Competitor price (optional)</label>
       <input id="rl-competitor" type="number" step="0.01" placeholder="auto"/>
-      <button id="btn-rl">Recommend with RL Agent</button>
-      <div id="rl-out" class="result">—</div>
-    </div>
-
-    <div class="card">
-      <h2>Model Performance</h2>
-      <div id="metrics" style="font-size:13px">—</div>
-      <h2 style="margin-top:18px">Sales History</h2>
-      <label>Product</label>
-      <select id="chart-product"></select>
-      <canvas id="chart"></canvas>
+      <button id="btn-rl">Run RL Agent</button>
+      <div id="rl-out" class="result empty">Learned agent is ready.</div>
     </div>
   </section>
-</main>
+
+  <h2 class="sec">Model Intelligence</h2>
+  <section class="grid">
+    <div class="card">
+      <h3>Model Performance</h3>
+      <p class="sub">Best backbone &amp; regression metrics</p>
+      <div id="metrics" class="metrics">Loading…</div>
+      <div id="metricbars" class="metricbar"></div>
+    </div>
+    <div class="card">
+      <div class="chart-title">
+        <h3>Demand Forecast</h3>
+      </div>
+      <label>Product</label>
+      <select id="chart-product"></select>
+      <div style="margin-top:6px"><canvas id="chart"></canvas></div>
+    </div>
+  </section>
+
+  <footer>
+    Smart Dynamic Pricing System — ML-driven price optimization with demand forecasting,
+    customer segmentation, reinforcement learning &amp; an AI negotiation agent.
+  </footer>
+</div>
 
 <script>
 const $ = id => document.getElementById(id);
+const fmt = n => (n == null ? "—" : Number(n).toLocaleString(undefined,{maximumFractionDigits:2}));
 
-let DEMO = false; // becomes true when the FastAPI backend is unreachable
+let DEMO = false;
 
 async function api(path, body) {
   const ctrl = new AbortController();
@@ -100,272 +213,316 @@ async function api(path, body) {
   try {
     const r = await fetch(path, { method: body ? "POST" : "GET",
       headers: { "Content-Type": "application/json" },
-      body: body ? JSON.stringify(body) : undefined,
-      signal: ctrl.signal });
+      body: body ? JSON.stringify(body) : undefined, signal: ctrl.signal });
     clearTimeout(timer);
     if (!r.ok) { const e = await r.json().catch(() => ({})); throw new Error(e.detail || r.statusText); }
     return r.json();
-  } catch (err) {
+  } catch {
     clearTimeout(timer);
     DEMO = true;
     return demoApi(path, body);
   }
 }
 
-// ================= STATIC DEMO MODE (works on GitHub Pages, no backend) ====
+// ---------- render helpers ----------
+function resultEl(container) {
+  container.classList.remove("empty");
+  container.innerHTML = "";
+  return {
+    head: (left, right) => {
+      const h = document.createElement("div"); h.className = "res-head";
+      h.innerHTML = `<span>${left}</span><span>${right || ""}</span>`;
+      container.appendChild(h);
+    },
+    row: (k, v, cls = "") => {
+      const r = document.createElement("div"); r.className = "res-row";
+      r.innerHTML = `<span class="k">${k}</span><span class="v ${cls}">${v}</span>`;
+      container.appendChild(r);
+    },
+  };
+}
+function showError(el, e) {
+  el.innerHTML = `<div class="err-box">${e && e.message ? e.message : e}</div>`;
+}
+function bar(label, pct, pctText) {
+  const mb = document.createElement("div");
+  mb.innerHTML = `<div class="mb"><span>${label}</span><b>${pctText}</b></div>
+    <div class="bar"><i style="width:${pct}%"></i></div>`;
+  return mb;
+}
+
+// ============ STATIC DEMO MODE (works on GitHub Pages, no backend) ==========
 const DEMO_PRODUCTS = [
-  ["P001", 146.90, 63.24, "Electronics"], ["P002", 38.50, 18.95, "Apparel"],
-  ["P003", 12.99, 5.60, "Beauty"],       ["P004", 74.00, 36.10, "Home & Kitchen"],
-  ["P005", 29.90, 13.25, "Sports"],      ["P006", 55.20, 27.80, "Apparel"],
-  ["P007", 92.40, 44.90, "Electronics"], ["P008", 18.75, 8.15, "Beauty"],
-  ["P009", 41.30, 19.60, "Sports"],      ["P010", 120.00, 58.00, "Home & Kitchen"],
-  ["P011", 66.60, 31.20, "Electronics"], ["P012", 24.40, 10.90, "Beauty"],
+  ["P001",146.90,63.24,"Electronics"],["P002",38.50,18.95,"Apparel"],
+  ["P003",12.99,5.60,"Beauty"],["P004",74.00,36.10,"Home & Kitchen"],
+  ["P005",29.90,13.25,"Sports"],["P006",55.20,27.80,"Apparel"],
+  ["P007",92.40,44.90,"Electronics"],["P008",18.75,8.15,"Beauty"],
+  ["P009",41.30,19.60,"Sports"],["P010",120.00,58.00,"Home & Kitchen"],
+  ["P011",66.60,31.20,"Electronics"],["P012",24.40,10.90,"Beauty"],
 ];
 const DEMO_CUSTOMERS = [
-  ["c-001", 88, 34, 8.9, "Premium", "Gold"],  ["c-002", 61, 22, 5.2, "Loyal", "Silver"],
-  ["c-003", 45, 14, 3.1, "Regular", "Bronze"],["c-004", 95, 41, 9.4, "Premium", "Gold"],
-  ["c-005", 12, 3, 1.2, "Bargain seeker", "New"],["c-006", 72, 26, 6.1, "Loyal", "Silver"],
-  ["c-007", 33, 9, 2.4, "Bargain seeker", "Bronze"],["c-008", 57, 18, 4.7, "Regular", "Silver"],
-  ["c-009", 81, 30, 7.7, "Premium", "Gold"],  ["c-010", 25, 7, 1.8, "Bargain seeker", "Bronze"],
-  ["c-011", 67, 24, 5.8, "Loyal", "Silver"],  ["c-012", 49, 15, 3.6, "Regular", "Bronze"],
-  ["c-013", 90, 37, 8.6, "Premium", "Gold"],  ["c-014", 16, 4, 1.4, "Bargain seeker", "New"],
-  ["c-015", 54, 17, 4.2, "Regular", "Bronze"],["c-016", 78, 28, 6.9, "Loyal", "Silver"],
-  ["c-017", 39, 11, 2.9, "Bargain seeker", "Bronze"],["c-018", 63, 21, 5.5, "Loyal", "Silver"],
-  ["c-019", 27, 8, 2.1, "Bargain seeker", "New"],["c-020", 84, 32, 7.9, "Premium", "Gold"],
+  ["c-001",88,34,8.9,"Premium","Gold"],["c-002",61,22,5.2,"Loyal","Silver"],
+  ["c-003",45,14,3.1,"Regular","Bronze"],["c-004",95,41,9.4,"Premium","Gold"],
+  ["c-005",12,3,1.2,"Bargain seeker","New"],["c-006",72,26,6.1,"Loyal","Silver"],
+  ["c-007",33,9,2.4,"Bargain seeker","Bronze"],["c-008",57,18,4.7,"Regular","Silver"],
+  ["c-009",81,30,7.7,"Premium","Gold"],["c-010",25,7,1.8,"Bargain seeker","Bronze"],
+  ["c-011",67,24,5.8,"Loyal","Silver"],["c-012",49,15,3.6,"Regular","Bronze"],
+  ["c-013",90,37,8.6,"Premium","Gold"],["c-014",16,4,1.4,"Bargain seeker","New"],
+  ["c-015",54,17,4.2,"Regular","Bronze"],["c-016",78,28,6.9,"Loyal","Silver"],
+  ["c-017",39,11,2.9,"Bargain seeker","Bronze"],["c-018",63,21,5.5,"Loyal","Silver"],
+  ["c-019",27,8,2.1,"Bargain seeker","New"],["c-020",84,32,7.9,"Premium","Gold"],
 ];
-
-function demoProduct(pid) {
-  const row = DEMO_PRODUCTS.find(p => p[0] === pid) || DEMO_PRODUCTS[0];
-  return { product_id: row[0], base_price: row[1], cost: row[2], category: row[3] };
+function demoProduct(pid){
+  const r = DEMO_PRODUCTS.find(p => p[0] === pid) || DEMO_PRODUCTS[0];
+  return { product_id:r[0], base_price:r[1], cost:r[2], category:r[3] };
 }
-function demoCustomer(cid) {
-  return DEMO_CUSTOMERS.find(c => c[0] === cid) || ["c-999", 40, 10, 3.0, "Regular", "Bronze"];
+function demoCustomer(cid){
+  return DEMO_CUSTOMERS.find(c => c[0] === cid) || ["c-999",40,10,3.0,"Regular","Bronze"];
 }
-function clamp(x, lo, hi) { return Math.max(lo, Math.min(hi, x)); }
-function mulberry(seed) {
-  return () => { seed |= 0; seed = seed + 0x6D2B79F5 | 0;
-    let t = Math.imul(seed ^ seed >>> 15, 1 | seed);
-    t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t;
-    return ((t ^ t >>> 14) >>> 0) / 4294967296; };
+function clamp(x,lo,hi){ return Math.max(lo, Math.min(hi, x)); }
+function mulberry(seed){
+  return () => { seed|=0; seed = seed + 0x6D2B79F5|0;
+    let t = Math.imul(seed ^ seed>>>15, 1|seed);
+    t = t + Math.imul(t ^ t>>>7, 61|t) ^ t;
+    return ((t ^ t>>>14)>>>0)/4294967296; };
 }
-
-async function demoApi(path, body) {
-  const p = path.replace(/^\/api\//, "");
-  if (p === "health") return { status: "ok", models_ready: false };
-  if (p === "products") return DEMO_PRODUCTS.map(x => x[0]);
-  if (p === "customers") return DEMO_CUSTOMERS.map(x => x[0]);
-  if (p.startsWith("sales/")) {
+function demoRec(prod, pressure){
+  return Math.round(prod.base_price * (0.86 - 0.06 * pressure) * 100) / 100;
+}
+async function demoApi(path, body){
+  const p = path.replace(/^\/api\//,"");
+  if (p === "health") return { status:"ok", models_ready:false };
+  if (p === "products") return DEMO_PRODUCTS.map(x=>x[0]);
+  if (p === "customers") return DEMO_CUSTOMERS.map(x=>x[0]);
+  if (p.startsWith("sales/")){
     const pid = p.slice(6);
     const days = (body && body.days) || 30;
-    const rnd = mulberry((parseInt(pid.slice(1), 10) || 1) * 7919);
-    const dates = [], units = [];
-    for (let i = days - 1; i >= 0; i--) {
-      const d = new Date(Date.now() - i * 86400000);
+    const rnd = mulberry((parseInt(pid.slice(1),10)||1)*7919);
+    const dates=[], units=[];
+    for (let i=days-1;i>=0;i--){
+      const d = new Date(Date.now()-i*86400000);
       dates.push(d.toISOString());
-      units.push(Math.max(0, Math.round(28 + 10 * Math.sin(i / 6) + rnd() * 14)));
+      units.push(Math.max(0, Math.round(28 + 10*Math.sin(i/6) + rnd()*14)));
     }
-    return { product_id: pid, dates, units_sold: units, price: [0] };
+    return { product_id:pid, dates, units_sold:units };
   }
-  if (p === "overview") {
-    return {
-      generated_on: "demo", model_backbone: "xgboost",
-      model_metrics: { models: { linear: { r2: 0.544, mae: 6.3, rmse: 8.2 },
-        random_forest: { r2: 0.64, mae: 5.52, rmse: 7.28 },
-        xgboost: { r2: 0.668, mae: 5.29, rmse: 6.99 } } },
-      products: 20, customers: 2000, total_sales_rows: 14460,
-      sales_last_30d: 21591, avg_daily_units: 34.8, avg_price: 88.17,
-      segments: { Regular: 646, Loyal: 645, "Bargain seeker": 402, Premium: 307 },
-      arima_series_fitted: 20,
-    };
+  if (p === "overview"){
+    return { generated_on:"demo", model_backbone:"xgboost",
+      model_metrics:{ models:{ linear:{r2:0.544,mae:6.3,rmse:8.2},
+        random_forest:{r2:0.64,mae:5.52,rmse:7.28},
+        xgboost:{r2:0.668,mae:5.29,rmse:6.99}}},
+      products:20, customers:2000, total_sales_rows:14460,
+      sales_last_30d:21591, avg_daily_units:34.8, avg_price:88.17,
+      segments:{ Regular:646, Loyal:645, "Bargain seeker":402, Premium:307 },
+      arima_series_fitted:20 };
   }
-  if (p === "price") {
+  if (p === "price"){
     const prod = demoProduct(body.product_id);
     const comp = body.competitor_price || prod.base_price;
     const inv = body.inventory != null ? body.inventory : 50;
     const press = body.demand_pressure != null ? body.demand_pressure : 0.5;
-    const rec = Math.round(prod.base_price * (0.86 - 0.06 * press) * 100) / 100;
-    const demand = Math.round((18 + 22 * press + (comp - rec) * 0.05) * 10) / 10;
-    return { product_id: prod.product_id, recommended_price: rec, cost: prod.cost,
-      expected_demand: demand, expected_revenue: Math.round(rec * demand * 100) / 100,
-      competitor_price: comp, inventory: inv, currency: "USD" };
+    const rec = demoRec(prod, press);
+    const demand = Math.round((18 + 22*press + (comp-rec)*0.05)*10)/10;
+    return { product_id:prod.product_id, recommended_price:rec, cost:prod.cost,
+      expected_demand:demand, expected_revenue:Math.round(rec*demand*100)/100,
+      competitor_price:comp, inventory:inv, currency:"USD" };
   }
-  if (p === "rl-price") {
+  if (p === "rl-price"){
     const prod = demoProduct(body.product_id);
     const press = body.demand_pressure != null ? body.demand_pressure : 0.5;
-    const rec = Math.round(prod.base_price * (0.86 - 0.06 * press) * 100) / 100;
-    const mults = [0.85, 0.92, 1.0, 1.08, 1.15];
-    const idx = clamp(Math.round(press * 4), 0, 4);
-    return { method: "rl",
-      product_state: { inventory: body.inventory || 50, demand_pressure: press, competitor_gap: 0.08 },
-      action_index: idx, action_multiplier: mults[idx],
-      price: Math.round(rec * mults[idx] * 100) / 100,
-      q_values: mults.map(m => Math.round((10000 + (m - 1) * 8000) * 100) / 100),
-      learning_steps: 2000 };
+    const rec = demoRec(prod, press);
+    const mults = [0.85,0.92,1.0,1.08,1.15];
+    const idx = clamp(Math.round(press*4),0,4);
+    return { method:"rl",
+      product_state:{ inventory:body.inventory||50, demand_pressure:press, competitor_gap:0.08 },
+      action_index:idx, action_multiplier:mults[idx],
+      price:Math.round(rec*mults[idx]*100)/100,
+      q_values:mults.map(m=>Math.round((10000+(m-1)*8000)*100)/100),
+      learning_steps:2000 };
   }
-  if (p === "negotiate") {
+  if (p === "negotiate"){
     const cust = demoCustomer(body.customer_id);
     const prod = demoProduct(body.product_id);
     const press = body.demand_pressure != null ? body.demand_pressure : 0.5;
     const loyalty = cust[1];
-    const rec = Math.round(prod.base_price * (0.86 - 0.06 * press) * 100) / 100;
-    const discount = clamp(0.05 + 0.12 * press + (100 - loyalty) * 0.003, 0.04, 0.35);
-    let final = Math.round(rec * (1 - discount) * 100) / 100;
+    const rec = demoRec(prod, press);
+    const discount = clamp(0.05 + 0.12*press + (100-loyalty)*0.003, 0.04, 0.35);
+    let final = Math.round(rec*(1-discount)*100)/100;
     let agreed = true, note = null;
-    if (body.max_budget && final > body.max_budget) {
-      const need = 1 - body.max_budget / rec;
-      if (need <= 0.4) { discount = need + 0.01; final = Math.round(rec * (1 - discount) * 100) / 100; note = "countered to match customer budget"; }
-      else { agreed = false; note = "customer budget below profitable floor"; }
+    if (body.max_budget && final > body.max_budget){
+      const need = 1 - body.max_budget/rec;
+      if (need <= 0.4){ discount = need+0.01; final = Math.round(rec*(1-discount)*100)/100; note="countered to match customer budget"; }
+      else { agreed=false; note="customer budget below profitable floor"; }
     }
-    return { agreed, rounds: 1, final_price: final,
-      discount_pct: Math.round(discount * 1000) / 10,
-      customer_segment: cust[4], loyalty_tier: cust[5],
-      savings: Math.round((rec - final) * 100) / 100, budget: body.max_budget || null,
-      transcript: [{ round: 1, customer_ask_discount: 0.12,
-        agent_offer_discount: Math.round(discount * 1000) / 1000, accepted: agreed, note }] };
+    return { agreed, rounds:1, final_price:final,
+      discount_pct:Math.round(discount*1000)/10,
+      customer_segment:cust[4], loyalty_tier:cust[5],
+      savings:Math.round((rec-final)*100)/100, budget:body.max_budget||null,
+      transcript:[{ round:1, customer_ask_discount:0.12,
+        agent_offer_discount:Math.round(discount*1000)/1000, accepted:agreed, note }] };
   }
-  throw new Error("unknown endpoint in demo mode: " + p);
+  throw new Error("Unknown endpoint in demo mode: " + p);
 }
 
-function fill(sel, items) {
-  const el = $(sel);
-  el.innerHTML = "";
+function fill(sel, items){
+  const el = $(sel); el.innerHTML = "";
   items.forEach(v => el.add(new Option(v, v)));
 }
-
-function statCard(k, v) {
-  const d = document.createElement("div");
-  d.className = "stat";
-  d.innerHTML = `<div class="k">${k}</div><div class="v">${v}</div>`;
+function statCard(k, v, s){
+  const d = document.createElement("div"); d.className = "kpi";
+  d.innerHTML = `<div class="k">${k}</div><div class="v">${v}</div>${s?`<div class="s">${s}</div>`:""}`;
   return d;
 }
 
-function drawChart(dates, units) {
+function drawChart(dates, units){
   const cv = $("chart");
-  cv.width = 560; cv.height = 220;
+  cv.width = 620; cv.height = 220;
   const ctx = cv.getContext("2d");
-  ctx.clearRect(0, 0, cv.width, cv.height);
-  const pad = 32, w = cv.width - pad * 2, h = cv.height - pad * 2;
+  ctx.clearRect(0,0,cv.width,cv.height);
+  const padL=34, padR=10, padT=14, padB=24;
+  const w = cv.width-padL-padR, h = cv.height-padT-padB;
   const max = Math.max(...units, 1);
-  ctx.strokeStyle = "#263049"; ctx.lineWidth = 1;
-  for (let i = 0; i <= 4; i++) {
-    const y = pad + h - h * i / 4;
-    ctx.beginPath(); ctx.moveTo(pad, y); ctx.lineTo(pad + w, y); ctx.stroke();
-    ctx.fillStyle = "#8b95ab"; ctx.font = "10px sans-serif";
-    ctx.fillText(Math.round(max * i / 4), 4, y + 3);
+  const xs = (i) => padL + w*i/(units.length-1||1);
+  const ys = (u) => padT + h - h*u/max;
+
+  ctx.strokeStyle = "#223052"; ctx.lineWidth = 1;
+  ctx.font = "10px Inter, sans-serif"; ctx.fillStyle = "#64748a";
+  for (let i=0;i<=4;i++){
+    const y = padT + h - h*i/4;
+    ctx.beginPath(); ctx.moveTo(padL,y); ctx.lineTo(padL+w,y); ctx.stroke();
+    ctx.fillText(Math.round(max*i/4), 4, y+3);
   }
-  ctx.beginPath(); ctx.strokeStyle = "#4f8cff"; ctx.lineWidth = 2;
-  units.forEach((u, i) => {
-    const x = pad + w * i / (units.length - 1 || 1);
-    const y = pad + h - h * u / max;
-    i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
-  });
+  // area
+  ctx.beginPath(); ctx.moveTo(xs(0), ys(units[0]));
+  units.forEach((u,i)=>ctx.lineTo(xs(i), ys(u)));
+  ctx.lineTo(xs(units.length-1), padT+h); ctx.lineTo(xs(0), padT+h); ctx.closePath();
+  const grad = ctx.createLinearGradient(0,padT,0,padT+h);
+  grad.addColorStop(0,"rgba(91,140,255,.45)"); grad.addColorStop(1,"rgba(91,140,255,0)");
+  ctx.fillStyle = grad; ctx.fill();
+  // line
+  ctx.beginPath(); ctx.strokeStyle = "#5b8cff"; ctx.lineWidth = 2.4; ctx.lineJoin="round";
+  units.forEach((u,i)=> i===0?ctx.moveTo(xs(i),ys(u)):ctx.lineTo(xs(i),ys(u)));
   ctx.stroke();
-  ctx.fillStyle = "#8b95ab"; ctx.font = "10px sans-serif";
-  if (dates.length) ctx.fillText(dates[0].slice(5), pad, cv.height - 4);
-  if (dates.length > 1) ctx.fillText(dates[dates.length - 1].slice(5), pad + w - 40, cv.height - 4);
+  // points
+  ctx.fillStyle = "#5b8cff";
+  units.forEach((u,i)=>{ ctx.beginPath(); ctx.arc(xs(i),ys(u),2.6,0,7); ctx.fill(); });
+  ctx.fillStyle = "#5f6a85"; ctx.font = "10px Inter, sans-serif";
+  if (dates.length) ctx.fillText(String(dates[0]).slice(5,10), padL, cv.height-6);
+  if (dates.length>1) ctx.textAlign="right", ctx.fillText(String(dates[dates.length-1]).slice(5,10), padL+w, cv.height-6);
 }
 
-async function init() {
-  try {
-    const o = await api("/api/overview");
-    const prods = await api("/api/products");
-    const custs = await api("/api/customers");
-    fill("prices-product", prods.slice(0, 12));
-    fill("neg-product", prods.slice(0, 12));
-    fill("rl-product", prods.slice(0, 12));
-    fill("chart-product", prods.slice(0, 12));
-    fill("neg-customer", custs.slice(0, 20));
+async function init(){
+  try{
+    const [o, prods, custs] = await Promise.all([
+      api("/api/overview"), api("/api/products"), api("/api/customers")]);
+    const products = prods.slice(0,12);
+    ["prices-product","neg-product","rl-product","chart-product"]
+      .forEach(id => fill(id, products));
+    fill("neg-customer", custs.slice(0,20));
 
-    const stats = $("stats");
-    stats.innerHTML = "";
-    [["Products", o.products], ["Customers", o.customers],
-     ["Sales rows", o.total_sales_rows.toLocaleString()],
-     ["Sales last 30d", o.sales_last_30d.toLocaleString()],
-     ["Avg daily units", o.avg_daily_units],
-     ["Avg price", "$" + o.avg_price]]
-      .forEach(([k, v]) => stats.append(statCard(k, v)));
+    const stats = $("stats"); stats.innerHTML = "";
+    stats.append(
+      statCard("Products", o.products),
+      statCard("Customers", o.customers),
+      statCard("Sales rows", fmt(o.total_sales_rows)),
+      statCard("Sales (30d)", fmt(o.sales_last_30d)),
+      statCard("Avg daily units", fmt(o.avg_daily_units)),
+      statCard("Avg price", "$"+fmt(o.avg_price)),
+    );
 
     const mm = o.model_metrics && o.model_metrics.models;
-    if (mm) {
-      const b = o.model_backbone;
-      $("metrics").textContent = `${b}  R² ${mm.r2[b]} · MAE ${mm.mae[b]} · RMSE ${mm.rmse[b]}`;
+    if (mm){
+      const back = o.model_backbone;
+      const m = mm[back];
+      $("metrics").insertAdjacentHTML("beforeend",
+        `<div class="row"><span>Backbone &amp; metric</span><b>${back.toUpperCase()}</b></div>`);
+      if (m) $("metrics").insertAdjacentHTML("beforeend",
+        `<div class="row"><span>R²</span><b>${fmt(m.r2)}</b></div>` +
+        `<div class="row"><span>MAE (units)</span><b>${fmt(m.mae)}</b></div>` +
+        `<div class="row"><span>RMSE (units)</span><b>${fmt(m.rmse)}</b></div>`);
+      const mb = $("metricbars"); mb.innerHTML = "";
+      Object.keys(mm).forEach(k => {
+        const r2 = mm[k].r2;
+        mb.appendChild(bar(k, Math.round(r2*100),
+          `R² ${fmt(r2)}`));
+      });
     }
 
-    $("chart-product").onchange = async () => {
+    const loadChart = async () => {
       const s = await api("/api/sales/" + $("chart-product").value);
       drawChart(s.dates, s.units_sold);
     };
-    const s = await api("/api/sales/" + $("chart-product").value);
-    drawChart(s.dates, s.units_sold);
-  } catch (e) {
-    $("health").textContent = "api offline — train models first (python -m src.training.train)";
-    $("metrics").textContent = "Models not ready.";
+    $("chart-product").onchange = loadChart;
+    await loadChart();
+  }catch(e){
+    $("health").textContent = "Backend unavailable — demo powered by local simulation";
+    $("health").className = "pill dim";
+    $("metrics").innerHTML = `<div class="row"><span>Status</span><b>Demo / simulated</b></div>`;
   }
 }
 
-async function health() {
-  try {
+async function health(){
+  try{
     const h = await api("/api/health");
     const p = $("health");
-    if (DEMO) {
-      p.textContent = "demo mode — static simulation";
-      p.className = "pill";
-    } else {
-      p.textContent = h.models_ready ? "models ready" : "models NOT trained";
+    if (DEMO){
+      p.textContent = "Demo mode · simulated data"; p.className = "pill dim";
+    }else{
+      p.textContent = h.models_ready ? "Models ready · live API" : "Models not trained";
       p.className = "pill " + (h.models_ready ? "ok" : "bad");
     }
-  } catch (_) { $("health").textContent = "api offline"; }
+  }catch(_){ $("health").textContent = "Offline"; }
 }
 
 $("btn-price").onclick = async () => {
-  try {
+  try{
     const r = await api("/api/price", {
       product_id: $("prices-product").value,
-      inventory: +$("prices-inv").value,
+      inventory: +$("prices-inv").value || 50,
       competitor_price: $("prices-competitor").value ? +$("prices-competitor").value : null,
-      demand_pressure: +$("prices-pressure").value });
-    $("price-out").textContent =
-`Recommended price:  $${r.recommended_price}
-Expected demand:   ${r.expected_demand} units
-Expected revenue:  $${r.expected_revenue}
-Competitor price:  $${r.competitor_price}
-Inventory:         ${r.inventory}
-Cost:              $${r.cost}`;
-  } catch (e) { $("price-out").textContent = "Error: " + e.message; }
+      demand_pressure: clamp(+$("prices-pressure").value || 0.5, 0, 1) });
+    const rc = resultEl($("price-out"));
+    rc.head("Optimization result", "USD");
+    rc.row("Recommended price", "$" + fmt(r.recommended_price), "hero");
+    rc.row("Expected demand", fmt(r.expected_demand) + " units");
+    rc.row("Expected revenue", "$" + fmt(r.expected_revenue));
+    rc.row("Competitor price", "$" + fmt(r.competitor_price));
+    rc.row("Inventory", fmt(r.inventory));
+    rc.row("Cost", "$" + fmt(r.cost));
+  }catch(e){ showError($("price-out"), e); }
 };
 
 $("btn-neg").onclick = async () => {
-  try {
+  try{
     const r = await api("/api/negotiate", {
-      customer_id: $("neg-customer").value,
-      product_id: $("neg-product").value,
+      customer_id: $("neg-customer").value, product_id: $("neg-product").value,
       max_budget: $("neg-budget").value ? +$("neg-budget").value : null,
-      demand_pressure: +$("neg-pressure").value,
-      inventory: 50 });
-    $("neg-out").textContent =
-`${r.agreed ? "Deal agreed" : "No deal"}
-Final price: $${r.final_price} (${r.discount_pct}% off)
-Segment: ${r.customer_segment}  Tier: ${r.loyalty_tier}
-Savings: $${r.savings}   Rounds: ${r.rounds}
-Transcript: ${JSON.stringify(r.transcript)}`;
-  } catch (e) { $("neg-out").textContent = "Error: " + e.message; }
+      demand_pressure: clamp(+$("neg-pressure").value || 0.5, 0, 1), inventory: 50 });
+    const rc = resultEl($("neg-out"));
+    rc.head(r.agreed ? "Deal agreed" : "No deal",
+      `<span class="badge ${r.agreed ? "" : "warn"}">${r.rounds} round${r.rounds>1?"s":""}</span>`);
+    rc.row("Final price", "$" + fmt(r.final_price), "hero");
+    rc.row("Discount", r.discount_pct + "% off · saves $" + fmt(r.savings));
+    rc.row("Customer segment", `<span class="badge soft">${r.customer_segment}</span> · <span class="badge">${r.loyalty_tier}</span>`);
+    if (r.budget != null) rc.row("Price budget", "$" + fmt(r.budget));
+  }catch(e){ showError($("neg-out"), e); }
 };
 
 $("btn-rl").onclick = async () => {
-  try {
+  try{
     const r = await api("/api/rl-price", {
       product_id: $("rl-product").value,
-      inventory: +$("rl-inv").value,
-      demand_pressure: +$("rl-pressure").value,
+      inventory: +$("rl-inv").value || 50,
+      demand_pressure: clamp(+$("rl-pressure").value || 0.5, 0, 1),
       competitor_price: $("rl-competitor").value ? +$("rl-competitor").value : null });
-    $("rl-out").textContent =
-`RL recommended price:  $${r.price}
-Action multiplier:   ${r.action_multiplier} (action #${r.action_index})
-State: inventory ${r.product_state.inventory}, demand ${r.product_state.demand_pressure},
-       comp gap ${r.product_state.competitor_gap}
-Q-values: ${r.q_values.join(" | ")}
-Learned over ${r.learning_steps} steps`;
-  } catch (e) { $("rl-out").textContent = "Error: " + e.message; }
+    const rc = resultEl($("rl-out"));
+    rc.head("RL decision · step " + fmt(r.learning_steps), `×${r.action_multiplier}`);
+    rc.row("RL price", "$" + fmt(r.price), "hero");
+    rc.row("Action index", "#" + r.action_index + " (multiplier ×" + r.action_multiplier + ")");
+    const st = r.product_state;
+    rc.row("Market state", `inv ${fmt(st.inventory)} · demand ${fmt(st.demand_pressure)} · gap ${fmt(st.competitor_gap ?? st.competitor_gap)}`);
+    rc.row("Q-values", r.q_values.map(v => fmt(v)).join(" · "));
+  }catch(e){ showError($("rl-out"), e); }
 };
 
 init();
