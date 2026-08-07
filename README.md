@@ -17,6 +17,13 @@ customer segmentation and an AI negotiation agent.
 - **AI Pricing Assistant** — an in-dashboard chat (Dataset + Manual modes) that answers
   pricing, demand, profit, segmentation, seasonal, inventory, RL and ML questions in a
   structured Answer / Reasoning / Business Impact / Recommended Action / Confidence format.
+- **Prediction Center** — a dedicated two-mode panel: **Dataset Mode** (upload/analyze a
+  dataset, review data quality & model metrics, and browse a per-product prediction table
+  with CSV export) and **Manual Mode** (enter price, demand, sales, inventory, competitor,
+  quantity and season to get KPI cards, a recommended price and dynamic reasoning).
+- **Currency support** — switch between USD ($) and INR (₹) from the header; INR uses
+  Indian digit grouping (e.g. ₹1,25,000) and the exchange rate is configurable. Every
+  price/revenue/profit value updates across all panels.
 - **Dashboard** — a lightweight HTML/JS monitor (served by the API) for price changes vs sales.
 
 ## Tech stack
@@ -75,8 +82,9 @@ scripts/
 dashboard/
   index.html           # monitor dashboard (served by the API)
   charts.js            # professional canvas charting (tooltips, zoom, bands, markers)
-  engine.js            # data pipeline: CSV/Excel, mapping, cleaning, client ML, analytics
-  analytics.js         # Advanced Analytics section (Demand / Profit / Seasonal / Inventory)
+  engine.js            # data pipeline: CSV/Excel, mapping, cleaning, client ML, analytics, currency
+  analytics.js         # Advanced Analytics (Overview / Dataset / Pricing / Demand / Profit / Seasonal / Inventory)
+  predict.js           # Prediction Center: Dataset + Manual modes, KPI cards, recommendation panel
   upload.js            # Data Source control + upload workflow + toasts/overlay
   assistant.js         # AI Pricing Assistant engine + UI
 ```
@@ -143,19 +151,46 @@ The header **Data Source** dropdown switches between the built-in **Demo Dataset
 - every prediction, chart and assistant answer switches to the uploaded dataset until
   the dashboard is reset.
 
-The **Advanced Analytics** section (Overview / Demand / Profit / Seasonal /
-Inventory & Pricing tabs) renders the revenue, profit, demand and seasonal charts with
-tooltips, zoom/pan, legends, grid lines, confidence bands, reference lines, and automatic
-highest/lowest markers. Use **Refresh Model** to retrain, **Reset Dashboard** to restore
-the demo dataset, and **Export Predictions (CSV)** to download per-product price
-recommendations.
+### Prediction Center (Dataset & Manual modes)
+
+The **Prediction Center** replaces the old demo model block with a 5-step workflow
+(Select Mode → Enter/Upload Data → Analyze → Predict → View Results):
+
+- **Dataset Mode** — shows dataset analytics (size, features, missing values, duplicates,
+  min/max/avg statistics and a row preview), the trained **ML model card** (model used,
+  training status, R², MAE, RMSE, train/test split, training time) and a **prediction
+  table** with the recommended price, change %, expected demand and revenue per product,
+  plus a CSV download button.
+- **Manual Mode** — an independent form (current price, demand, sales, inventory,
+  competitor price, quantity, season, month, day type) with a **Predict Price** button
+  that produces professional KPI cards (Recommended Price, Expected Demand, Expected
+  Revenue, Expected Profit, Price Change, Confidence), the explanation
+  *"The recommended price is based on demand, inventory, competitor pricing, and
+  historical sales patterns"*, and a dynamic **Pricing Recommendation** panel that
+  explains each factor (demand pressure, inventory, competitor price, season, margin).
+
+The **Advanced Analytics** section (Overview / **Dataset** / **Pricing** / Demand /
+Profit / Seasonal / Inventory tabs) renders the revenue, profit, demand and seasonal
+charts with tooltips, zoom/pan, legends, grid lines, confidence bands, reference lines,
+and automatic highest/lowest markers. The **Pricing** tab adds Actual vs Recommended
+Price, Demand vs Price, Revenue & Profit comparison, Sales/Demand trend, Inventory vs
+Price and Competitor vs Recommended charts. Use **Refresh Model** to retrain,
+**Reset Dashboard** to restore the sample dataset, and **Export Predictions (CSV)** to
+download per-product price recommendations.
+
+### Currency
+
+The header **currency selector** switches between **USD ($)** and **INR (₹)**. All
+prices, revenue and profit values update everywhere immediately. INR uses Indian digit
+grouping (lakh/crore — e.g. ₹1,25,000) and an **exchange rate field** appears for INR so
+the conversion (default 1 USD = 83 INR) can be adjusted.
 
 Verify the new pipeline and modules with the Node harnesses:
 
 ```bash
 node scripts/test_dashboard_demo.js   # demo endpoints + assistant engine
-node scripts/test_engine.js           # CSV/mapping/cleaning/model/analytics/forecast
-node scripts/test_dashboard_boot.js   # DOM-shim boot for charts/engine/analytics/upload
+node scripts/test_engine.js           # CSV/mapping/cleaning/model/analytics/forecast/currency
+node scripts/test_dashboard_boot.js   # DOM-shim boot for charts/engine/analytics/predict/upload
 ```
 
 To publish: push this repo, enable **Settings → Pages** (deploy from the `main` branch,

@@ -34,6 +34,8 @@
   .brand h1{margin:0;font-size:19px;letter-spacing:.2px}
   .brand p{margin:2px 0 0;font-size:12px;color:var(--faint)}
   .spacer{flex:1}
+  .head-controls{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+  .rate-input{width:74px;margin:0;padding:8px 10px;font-size:12.5px}
   .pill{display:inline-flex;align-items:center;gap:7px;padding:7px 14px;border-radius:999px;
     font-size:12.5px;font-weight:600;border:1px solid var(--line);background:var(--card)}
   .pill::before{content:"";width:8px;height:8px;border-radius:50%;background:var(--warn)}
@@ -122,83 +124,96 @@
     </div>
   </div>
   <div class="spacer"></div>
-  <select id="data-source" class="ds-select">
-    <option value="demo">Demo Dataset</option>
-    <option value="upload">Upload Dataset</option>
-  </select>
-  <span id="ds-badge" class="ds-badge" style="display:none"></span>
-  <span id="health" class="pill">checking</span>
+  <div class="head-controls">
+    <select id="currency-sel" class="ds-select" title="Display currency">
+      <option value="USD">USD ($)</option>
+      <option value="INR">INR (₹)</option>
+    </select>
+    <input id="currency-rate" class="rate-input" type="number" step="0.01" min="0" value="83"
+      title="Exchange rate (1 USD = ? INR)" style="display:none"/>
+    <select id="data-source" class="ds-select">
+      <option value="demo">Sample Dataset</option>
+      <option value="upload">Upload Dataset</option>
+    </select>
+    <span id="ds-badge" class="ds-badge" style="display:none"></span>
+    <span id="health" class="pill">checking</span>
+  </div>
 </header>
 
 <div class="wrap">
   <h2 class="sec">Platform Overview</h2>
   <section id="stats" class="kpis"></section>
 
-  <h2 class="sec">Decision Engine</h2>
-  <section class="grid">
-    <div class="card">
-      <h3>Price Recommendation</h3>
-      <p class="sub">Revenue-maximising price from demand model, inventory &amp; competition</p>
-      <label>Product ID</label>
-      <select id="prices-product"></select>
-      <label>Inventory (units)</label>
-      <input id="prices-inv" type="number" value="50" min="0"/>
-      <label>Demand pressure (0–1)</label>
-      <input id="prices-pressure" type="number" value="0.5" step="0.1" min="0" max="1"/>
-      <label>Competitor price (optional)</label>
-      <input id="prices-competitor" type="number" step="0.01" placeholder="auto"/>
-      <button id="btn-price">Optimize Price</button>
-      <div id="price-out" class="result empty">Run a recommendation to see the suggested price.</div>
-    </div>
+  <h2 class="sec">Prediction Center</h2>
+  <div id="predict-root"></div>
 
-    <div class="card">
-      <h3>AI Negotiation Agent</h3>
-      <p class="sub">Personalised discount based on loyalty, segment, demand &amp; budget</p>
-      <label>Customer ID</label>
-      <select id="neg-customer"></select>
-      <label>Product ID</label>
-      <select id="neg-product"></select>
-      <label>Demand pressure (0–1)</label>
-      <input id="neg-pressure" type="number" value="0.5" step="0.1" min="0" max="1"/>
-      <label>Max budget (optional)</label>
-      <input id="neg-budget" type="number" step="0.01" placeholder="e.g. 90.00"/>
-      <button id="btn-neg">Run Negotiation</button>
-      <div id="neg-out" class="result empty">Start a negotiation session.</div>
-    </div>
-
-    <div class="card">
-      <h3>RL Price Agent</h3>
-      <p class="sub">Reinforcement-learning price action over the Q-value space</p>
-      <label>Product ID</label>
-      <select id="rl-product"></select>
-      <label>Inventory (units)</label>
-      <input id="rl-inv" type="number" value="50" min="0"/>
-      <label>Demand pressure (0–1)</label>
-      <input id="rl-pressure" type="number" value="0.5" step="0.1" min="0" max="1"/>
-      <label>Competitor price (optional)</label>
-      <input id="rl-competitor" type="number" step="0.01" placeholder="auto"/>
-      <button id="btn-rl">Run RL Agent</button>
-      <div id="rl-out" class="result empty">Learned agent is ready.</div>
-    </div>
-  </section>
-
-  <h2 class="sec">Model Intelligence</h2>
-  <section class="grid">
-    <div class="card">
-      <h3>Model Performance</h3>
-      <p class="sub">Best backbone &amp; regression metrics</p>
-      <div id="metrics" class="metrics">Loading…</div>
-      <div id="metricbars" class="metricbar"></div>
-    </div>
-    <div class="card">
-      <div class="chart-title">
-        <h3>Demand Forecast</h3>
+  <div id="dataset-only">
+    <h2 class="sec">Decision Engine</h2>
+    <section class="grid">
+      <div class="card">
+        <h3>Price Recommendation</h3>
+        <p class="sub">Revenue-maximising price from demand model, inventory &amp; competition</p>
+        <label>Product ID</label>
+        <select id="prices-product"></select>
+        <label>Inventory (units)</label>
+        <input id="prices-inv" type="number" value="50" min="0"/>
+        <label>Demand pressure (0–1)</label>
+        <input id="prices-pressure" type="number" value="0.5" step="0.1" min="0" max="1"/>
+        <label>Competitor price (optional)</label>
+        <input id="prices-competitor" type="number" step="0.01" placeholder="auto"/>
+        <button id="btn-price">Optimize Price</button>
+        <div id="price-out" class="result empty">Run a recommendation to see the suggested price.</div>
       </div>
-      <label>Product</label>
-      <select id="chart-product"></select>
-      <div style="margin-top:6px"><canvas id="chart"></canvas></div>
-    </div>
-  </section>
+
+      <div class="card">
+        <h3>AI Negotiation Agent</h3>
+        <p class="sub">Personalised discount based on loyalty, segment, demand &amp; budget</p>
+        <label>Customer ID</label>
+        <select id="neg-customer"></select>
+        <label>Product ID</label>
+        <select id="neg-product"></select>
+        <label>Demand pressure (0–1)</label>
+        <input id="neg-pressure" type="number" value="0.5" step="0.1" min="0" max="1"/>
+        <label>Max budget (optional)</label>
+        <input id="neg-budget" type="number" step="0.01" placeholder="e.g. 90.00"/>
+        <button id="btn-neg">Run Negotiation</button>
+        <div id="neg-out" class="result empty">Start a negotiation session.</div>
+      </div>
+
+      <div class="card">
+        <h3>RL Price Agent</h3>
+        <p class="sub">Reinforcement-learning price action over the Q-value space</p>
+        <label>Product ID</label>
+        <select id="rl-product"></select>
+        <label>Inventory (units)</label>
+        <input id="rl-inv" type="number" value="50" min="0"/>
+        <label>Demand pressure (0–1)</label>
+        <input id="rl-pressure" type="number" value="0.5" step="0.1" min="0" max="1"/>
+        <label>Competitor price (optional)</label>
+        <input id="rl-competitor" type="number" step="0.01" placeholder="auto"/>
+        <button id="btn-rl">Run RL Agent</button>
+        <div id="rl-out" class="result empty">Learned agent is ready.</div>
+      </div>
+    </section>
+
+    <h2 class="sec">Model Intelligence</h2>
+    <section class="grid">
+      <div class="card">
+        <h3>Model Performance</h3>
+        <p class="sub">Best backbone &amp; regression metrics</p>
+        <div id="metrics" class="metrics">Loading…</div>
+        <div id="metricbars" class="metricbar"></div>
+      </div>
+      <div class="card">
+        <div class="chart-title">
+          <h3>Demand Forecast</h3>
+        </div>
+        <label>Product</label>
+        <select id="chart-product"></select>
+        <div style="margin-top:6px"><canvas id="chart"></canvas></div>
+      </div>
+    </section>
+  </div>
 
   <h2 class="sec">Advanced Analytics</h2>
   <div id="px-root"></div>
@@ -216,6 +231,8 @@
 const $ = id => document.getElementById(id);
 const fmt = n => (n == null ? "—" : Number(n).toLocaleString(undefined,{maximumFractionDigits:2}));
 const P = () => (window.PricingData || null);
+const money = (n, d) => (window.PricingData ? window.PricingData.fmtMoney(n, d) : "$" + fmt(n));
+const MONTH_NAMES_FMT = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
 
 let DEMO = false;
 
@@ -396,6 +413,12 @@ async function demoApi(path, body){
     const rec = Math.round(eff*(0.88-0.05*press)*100)/100;
     const optDemand = Math.max(0, Math.min(18+24*press, inv));
     const grid = [0,5,10,15,20];
+    const reasons = [
+      { icon:"→", tone:"flat", text:"Demand pressure is moderate (" + Math.round((b.demand_pressure != null ? b.demand_pressure : 0.5) * 100) + "%)." },
+      { icon:"↑", tone:"up", text:"Low inventory (" + inv + " units) supports a higher price to protect margin." },
+      { icon:"→", tone:"flat", text:"Competitor price at " + money(comp) + " — the recommendation stays aligned with the market." },
+      { icon:"↗", tone:"up", text:"Peak season month (" + MONTH_NAMES_FMT[b.month ? b.month - 1 : new Date().getMonth()] + ") justifies a higher price." },
+    ];
     return {
       input: b,
       current:{ price:+eff.toFixed(2), demand, revenue, profit,
@@ -414,6 +437,8 @@ async function demoApi(path, body){
         { feature:"inventory", label:"stock +50%", impact_pct:+1.2 },
         { feature:"weekend", label:"weekday → weekend", impact_pct:+7.8 },
       ],
+      reasons: reasons,
+      model: { name:"Linear Regression (ridge)", backbone:"client-linreg", r2:0.668, mae:5.29, rmse:6.99 },
       confidence_pct: b.price > 0 && b.cost > 0 ? 72 : 35,
       currency:"USD",
     };
@@ -565,7 +590,7 @@ window.PricingDashboard = {
         statCard("Sales rows", fmt(o.total_sales_rows)),
         statCard("Sales (30d)", fmt(o.sales_last_30d)),
         statCard("Avg daily units", fmt(o.avg_daily_units)),
-        statCard("Avg price", "$"+fmt(o.avg_price)),
+        statCard("Avg price", money(o.avg_price)),
       );
 
       const mm = o.model_metrics && o.model_metrics.models;
@@ -598,6 +623,33 @@ async function init(){
   await window.PricingDashboard.refreshAll();
 }
 
+/* Toggle the dataset-only sections (Decision Engine / Model Intelligence)
+ * based on the Prediction Center mode. */
+function syncDatasetSections(){
+  var hide = window.PricingPredict && window.PricingPredict.getMode
+    ? window.PricingPredict.getMode() === "manual" : false;
+  var el = document.getElementById("dataset-only");
+  if (el) el.style.display = hide ? "none" : "";
+}
+
+/* Apply the selected currency and re-render every panel that shows money. */
+function applyCurrency(){
+  var sel = document.getElementById("currency-sel");
+  var rate = document.getElementById("currency-rate");
+  if (!sel || !window.PricingData) return;
+  var code = sel.value;
+  var r = code === "INR" && rate ? (+rate.value || 83) : 1;
+  window.PricingData.setCurrency(code, r);
+  if (rate) rate.style.display = code === "INR" ? "" : "none";
+  if (window.PricingAnalytics) window.PricingAnalytics.render();
+  if (window.PricingPredict) window.PricingPredict.render();
+  if (window.PricingDashboard) window.PricingDashboard.refreshAll();
+  if (window.PricingAssistant && window.PricingAssistant.reload) window.PricingAssistant.reload();
+  if (window.PricingUI) window.PricingUI.toast("Currency updated", code === "INR" ? "Showing prices in ₹ (rate " + r + " ₹/US$)." : "Showing prices in US$ (US$1 = " + (1 / r) + " ₹).", "ok");
+}
+window.applyCurrency = applyCurrency;
+window.syncDatasetSections = syncDatasetSections;
+
 async function health(){
   const pill = $("health");
   if (window.PricingData && window.PricingData.active()){
@@ -625,13 +677,13 @@ $("btn-price").onclick = async () => {
       competitor_price: $("prices-competitor").value ? +$("prices-competitor").value : null,
       demand_pressure: clamp(+$("prices-pressure").value || 0.5, 0, 1) });
     const rc = resultEl($("price-out"));
-    rc.head("Optimization result", "USD");
-    rc.row("Recommended price", "$" + fmt(r.recommended_price), "hero");
+    rc.head("Optimization result", P() && P().getCurrency ? P().getCurrency().code : "USD");
+    rc.row("Recommended price", money(r.recommended_price), "hero");
     rc.row("Expected demand", fmt(r.expected_demand) + " units");
-    rc.row("Expected revenue", "$" + fmt(r.expected_revenue));
-    rc.row("Competitor price", "$" + fmt(r.competitor_price));
+    rc.row("Expected revenue", money(r.expected_revenue));
+    rc.row("Competitor price", money(r.competitor_price));
     rc.row("Inventory", fmt(r.inventory));
-    rc.row("Cost", "$" + fmt(r.cost));
+    rc.row("Cost", money(r.cost));
   }catch(e){ showError($("price-out"), e); }
 };
 
@@ -644,10 +696,10 @@ $("btn-neg").onclick = async () => {
     const rc = resultEl($("neg-out"));
     rc.head(r.agreed ? "Deal agreed" : "No deal",
       `<span class="badge ${r.agreed ? "" : "warn"}">${r.rounds} round${r.rounds>1?"s":""}</span>`);
-    rc.row("Final price", "$" + fmt(r.final_price), "hero");
-    rc.row("Discount", r.discount_pct + "% off · saves $" + fmt(r.savings));
+    rc.row("Final price", money(r.final_price), "hero");
+    rc.row("Discount", r.discount_pct + "% off · saves " + money(r.savings));
     rc.row("Customer segment", `<span class="badge soft">${r.customer_segment}</span> · <span class="badge">${r.loyalty_tier}</span>`);
-    if (r.budget != null) rc.row("Price budget", "$" + fmt(r.budget));
+    if (r.budget != null) rc.row("Price budget", money(r.budget));
   }catch(e){ showError($("neg-out"), e); }
 };
 
@@ -660,7 +712,7 @@ $("btn-rl").onclick = async () => {
       competitor_price: $("rl-competitor").value ? +$("rl-competitor").value : null });
     const rc = resultEl($("rl-out"));
     rc.head("RL decision · step " + fmt(r.learning_steps), `×${r.action_multiplier}`);
-    rc.row("RL price", "$" + fmt(r.price), "hero");
+    rc.row("RL price", money(r.price), "hero");
     rc.row("Action index", "#" + r.action_index + " (multiplier ×" + r.action_multiplier + ")");
     const st = r.product_state;
     rc.row("Market state", `inv ${fmt(st.inventory)} · demand ${fmt(st.demand_pressure)} · gap ${fmt(st.competitor_gap ?? st.competitor_gap)}`);
@@ -674,11 +726,22 @@ health();
 <script src="charts.js"></script>
 <script src="engine.js"></script>
 <script src="analytics.js"></script>
+<script src="predict.js"></script>
 <script src="upload.js"></script>
 <script src="assistant.js"></script>
 <script>
 window.PricingAnalytics && window.PricingAnalytics.mount();
+window.PricingPredict && window.PricingPredict.mount();
 window.PricingUI && window.PricingUI.boot();
+
+/* currency selector wiring */
+(function () {
+  var sel = document.getElementById("currency-sel");
+  var rate = document.getElementById("currency-rate");
+  if (sel) sel.onchange = function () { applyCurrency(); syncDatasetSections(); };
+  if (rate) rate.onchange = function () { applyCurrency(); };
+  applyCurrency();
+})();
 </script>
 </body>
 </html>

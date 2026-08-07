@@ -616,8 +616,9 @@ if (typeof document !== "undefined") {
       const [pd, cd, ins, overview] = await Promise.all([
         api("/api/products/detail"), api("/api/customers/detail"),
         api("/api/insights"), api("/api/overview")]);
+      const cur = window.PricingData ? window.PricingData.getCurrency() : { code: "USD", symbol: "$" };
       return {
-        currency: "$", products: pd, customers: cd, insights: ins, overview,
+        currency: cur.symbol, currencyCode: cur.code, products: pd, customers: cd, insights: ins, overview,
         price: (r) => api("/api/price", r),
         rl: (r) => api("/api/rl-price", r),
         negotiate: (r) => api("/api/negotiate", r),

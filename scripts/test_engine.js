@@ -112,6 +112,45 @@ const exp = P.exportPredictions();
 assert(/product_id/.test(exp.csv) && exp.csv.split("\n").length === a.products + 1, "export CSV has header + one row per product");
 assert(/smart-pricing-predictions/.test(exp.name), "export filename names the predictions file");
 
+// ---- currency support ------------------------------------------------
+const curInr = P.setCurrency("INR", 83);
+assert(curInr.code === "INR" && curInr.symbol === "₹" && curInr.rate === 83, "setCurrency switches to INR with custom rate");
+assert(P.fmtMoney(125000, 0) === "₹1,03,75,000", "INR lakh grouping (125000 USD × 83 → ₹1,03,75,000)");
+assert(P.fmtMoney(49.99, 2) === "₹4,149.17", "INR conversion of 49.99 USD (" + P.fmtMoney(49.99, 2) + ")");
+const curUsd = P.setCurrency("USD");
+assert(curUsd.code === "USD" && curUsd.rate === 1, "setCurrency back to USD resets rate");
+assert(P.fmtMoney(49.99, 2) === "$49.99", "USD formatting with $");
+assert(P.fmtMoney(null) === "—", "fmtMoney handles null");
+
+// ---- dataset report (analytics requirement) ---------------------------
+const rep = P.report();
+assert(rep.size === a.records, "report size matches records");
+assert(typeof rep.duplicates === "number" && rep.duplicates >= 0, "report counts duplicate records (" + rep.duplicates + ")");
+assert(typeof rep.missingValues === "number", "report counts missing values (" + rep.missingValues + ")");
+assert(rep.stats.price.min <= rep.stats.price.max, "report price min ≤ max");
+assert(rep.stats.units_sold.avg > 0, "report units average present");
+assert(Array.isArray(rep.preview) && rep.preview.length >= 1, "report includes dataset preview");
+assert(rep.preview[0].product_id && typeof rep.preview[0].price === "number", "preview rows carry product + price");
+
+// ---- recommendation reasons ------------------------------------------
+const rr = P.recommendReasons(prod, { inventory: 50, demand_pressure: 0.5, month: 11 });
+assert(Array.isArray(rr.reasons) && rr.reasons.length >= 3, "recommendReasons returns explanations (" + rr.reasons.length + ")");
+assert(rr.reasons.every(r => r.text && r.tone), "each reason has text + tone");
+assert(rr.recommended_price > 0 && typeof rr.delta_pct === "number", "recommendReasons returns price + delta");
+const rrHigh = P.recommendReasons(prod, { inventory: 10, demand_pressure: 0.9 });
+assert(rrHigh.reasons.some(r => r.tone === "up"), "low inventory + high pressure produces upward reasons");
+
+// ---- prediction table --------------------------------------------------
+const ptab = P.predictionTable();
+assert(ptab.length === a.products, "predictionTable covers every product (" + ptab.length + ")");
+assert(ptab[0].recommended_price > 0 && typeof ptab[0].price_change_pct === "number", "prediction rows carry recommendation + change");
+
+// ---- manual predict reasons + model ------------------------------------
+const manR = P.manualPredict({ price: 49.99, cost: 22, inventory: 50, competitor: 55, demand_pressure: 0.5, month: 11 });
+assert(Array.isArray(manR.reasons) && manR.reasons.length >= 3, "manual prediction includes dynamic reasons");
+assert(manR.model && manR.model.name === "Linear Regression (ridge)", "manual prediction reports the model used");
+assert(manR.optimal.recommended_price > 0, "manual prediction optimal preserved");
+
 // ---- demo mode regression --------------------------------------------
 P.applyDemo();
 assert(!P.active() && P.source() === "demo", "reset returns to demo source");

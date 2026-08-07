@@ -56,6 +56,8 @@ const D = globalThis.__demo;
   assert(man.optimal && man.optimal.recommended_price > 0 && typeof man.optimal.price_delta_pct === "number", "manual returns optimal");
   assert(Array.isArray(man.discount_grid) && man.discount_grid.length === 5 && man.discount_grid.every(x => x.discount != null), "manual discount_grid has 5 entries");
   assert(Array.isArray(man.feature_impacts) && man.feature_impacts.length >= 3, "manual feature impacts present");
+  assert(Array.isArray(man.reasons) && man.reasons.length >= 3 && man.reasons.every(r => r.text && r.tone), "demo manual returns dynamic reasons");
+  assert(man.model && man.model.name && typeof man.model.r2 === "number", "demo manual reports the model used");
   assert(Number.isInteger(man.confidence_pct) && man.confidence_pct >= 0, "manual confidence_pct is an integer");
 })();
 

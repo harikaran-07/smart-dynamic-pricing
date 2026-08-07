@@ -79,6 +79,7 @@
     });
     this.xLabels = this.o.xLabels || [];
     this.yFmt = this.o.yFmt || function (v) { return v == null ? "" : String(Math.round(v)); };
+    this.yFmtRight = this.o.yFmtRight || this.yFmt;
     this.legend = this.o.legend !== false;
     this.markers = this.o.markers !== false;
     this.showValues = this.o.showValues || false; // 'bars' | 'maxmin' | false
@@ -437,7 +438,7 @@
       for (var t2 = 0; t2 < ticksR.length; t2++) {
         var ry = yOf(ticksR[t2], "right");
         ctx.fillStyle = "#6b7a99"; ctx.textAlign = "left"; ctx.textBaseline = "middle";
-        ctx.fillText(this.yFmt(ticksR[t2]), this._padL + W + 6, ry);
+        ctx.fillText(this.yFmtRight(ticksR[t2]), this._padL + W + 6, ry);
       }
     }
     // vertical grid (sparse)

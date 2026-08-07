@@ -39,7 +39,41 @@
   /* Seasonal curve per month (index 1..12). */
   var SEASONAL = { 1: 1.12, 2: 0.92, 3: 1.0, 4: 1.02, 5: 0.96, 6: 0.84, 7: 0.78, 8: 0.88, 9: 1.08, 10: 1.32, 11: 1.5, 12: 1.24 };
   var MONTH_NAMES = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+
+  /* ------------------------------------------------------------------ */
+  /* currency support                                                    */
+  /* ------------------------------------------------------------------ */
+  var CURRENCY_CODE = "USD";
   var CURRENCY = "$";
+  var EXCHANGE_RATES = { USD: 1, INR: 83 };
+  var EXCHANGE_RATE = 1;
+  var CURRENCY_LOCALE = "en-US";
+
+  /* Set the active display currency. code is one of "USD" / "INR".
+   * rate optionally overrides the conversion rate (defaults per currency). */
+  function setCurrency(code, rate) {
+    code = String(code || "USD").toUpperCase();
+    CURRENCY_CODE = EXCHANGE_RATES[code] != null ? code : "USD";
+    CURRENCY = CURRENCY_CODE === "INR" ? "\u20B9" : "$";
+    EXCHANGE_RATE = (rate != null && isFinite(rate) && rate > 0) ? +rate : EXCHANGE_RATES[CURRENCY_CODE];
+    CURRENCY_LOCALE = CURRENCY_CODE === "INR" ? "en-IN" : "en-US";
+    return getCurrency();
+  }
+
+  function getCurrency() {
+    return { code: CURRENCY_CODE, symbol: CURRENCY, rate: EXCHANGE_RATE };
+  }
+
+  /* Format a number as money in the active currency. Values are interpreted
+   * as USD internally and converted by EXCHANGE_RATE when displayed. INR uses
+   * Indian digit grouping (lakh/crore), e.g. 125000 -> ₹1,25,000. */
+  function fmtMoney(n, decimals) {
+    if (n == null || isNaN(n)) return "\u2014";
+    var v = n * EXCHANGE_RATE;
+    return CURRENCY + Number(v).toLocaleString(CURRENCY_LOCALE, {
+      maximumFractionDigits: decimals == null ? 2 : decimals,
+    });
+  }
 
   /* ------------------------------------------------------------------ */
   /* demo dataset generation                                            */
@@ -262,6 +296,31 @@
     return best;
   }
 
+  /* Basic descriptive statistics for a numeric array. */
+  function basicStats(arr) {
+    var vals = (arr || []).filter(function (v) { return v != null && !isNaN(v); });
+    if (!vals.length) return { min: 0, max: 0, avg: 0, count: 0 };
+    var min = Math.min.apply(null, vals), max = Math.max.apply(null, vals);
+    var sum = vals.reduce(function (a, b) { return a + b; }, 0);
+    return {
+      min: Math.round(min * 100) / 100,
+      max: Math.round(max * 100) / 100,
+      avg: Math.round(sum / vals.length * 100) / 100,
+      count: vals.length,
+    };
+  }
+
+  /* Count exact duplicate records (same product, date, price, units, inventory). */
+  function countDuplicates(rows) {
+    var seen = {}, dups = 0;
+    (rows || []).forEach(function (r) {
+      var key = [r.product_id, dayKey(r), r.price, r.units_sold, r.inventory].join("|");
+      if (seen[key]) dups++;
+      else seen[key] = true;
+    });
+    return dups;
+  }
+
   /* Normalise raw rows (with a resolved column mapping) into canonical rows.
    * Derives optional fields when they are missing. */
   function normalizeRows(rawRows, mapping) {
@@ -430,11 +489,12 @@
     for (f = 0; f < FEATURES.length; f++) coefMap[FEATURES[f]] = coef[f + 1] / std[f];
 
     return {
-      backbone: "client-linreg", features: FEATURES.slice(),
+      backbone: "client-linreg", name: "Linear Regression (ridge)", features: FEATURES.slice(),
       mean: mean, std: std, coef: coef, coefMap: coefMap,
       r2: Math.round(r2 * 1000) / 1000, mae: Math.round(mae * 100) / 100, rmse: Math.round(rmse * 100) / 100,
       trainSize: train.length, testSize: test.length, yMean: yMean,
       trainingTimeMs: Math.round((now() - t0) * 10) / 10,
+      status: "trained", trainedAt: new Date().toISOString(),
       predict: predict, predictFeatures: predictScaled,
     };
   }
@@ -590,6 +650,100 @@
     };
   }
 
+  /* ------------------------------------------------------------------ */
+  /* dataset report (analytics panel requirement #7)                    */
+  /* ------------------------------------------------------------------ */
+  function datasetReport(rows) {
+    var report = {
+      size: rows.length,
+      features: FEATURES.length,
+      missingValues: 0,
+      duplicates: countDuplicates(rows),
+      stats: {},
+      preview: rows.slice(0, 8).map(function (r) {
+        return {
+          product_id: r.product_id,
+          date: r.date ? dayKey(r) : "",
+          price: r.price, cost: r.cost, competitor_price: r.competitor_price,
+          inventory: r.inventory, units_sold: r.units_sold,
+        };
+      }),
+    };
+    var statsFields = ["price", "cost", "competitor_price", "inventory", "units_sold"];
+    statsFields.forEach(function (f) {
+      report.stats[f] = basicStats(rows.map(function (r) { return r[f]; }));
+    });
+    rows.forEach(function (r) {
+      statsFields.forEach(function (f) { if (r[f] == null || isNaN(r[f])) report.missingValues++; });
+    });
+    return report;
+  }
+
+  /* Dynamic pricing recommendation reasons (requirement #9). Evaluates
+   * demand, inventory, competitor price, season and margin for a product
+   * and returns human-readable factors that explain the recommendation. */
+  function recommendReasons(product, opts) {
+    opts = opts || {};
+    var reasons = [];
+    var inv = opts.inventory != null ? opts.inventory : (product ? product.inventory : 50);
+    var comp = opts.competitor_price != null ? opts.competitor_price : (product ? product.competitor_price : null);
+    var base = product ? product.base_price : (opts.price != null ? opts.price : 50);
+    var cost = product ? product.cost : (opts.cost != null ? opts.cost : base * 0.5);
+    var rec = optimizePrice(product || { product_id: "MANUAL", base_price: base, cost: cost, competitor_price: comp || base * 1.03, inventory: inv }, opts);
+
+    /* demand pressure: compare modelled demand at base vs typical baseline */
+    var press = opts.demand_pressure != null ? opts.demand_pressure : 0.5;
+    if (press >= 0.7) reasons.push({ icon: "↗", tone: "up", text: "High demand pressure (" + Math.round(press * 100) + "%) supports a price increase." });
+    else if (press <= 0.3) reasons.push({ icon: "↘", tone: "down", text: "Low demand pressure (" + Math.round(press * 100) + "%) — a modest price reduction can stimulate sales." });
+    else reasons.push({ icon: "→", tone: "flat", text: "Demand pressure is moderate (" + Math.round(press * 100) + "%), keeping the price near the optimum." });
+
+    /* inventory */
+    if (inv <= 20) reasons.push({ icon: "↑", tone: "up", text: "Low inventory (" + inv + " units) lets us raise the price to protect margin." });
+    else if (inv >= 200) reasons.push({ icon: "↓", tone: "down", text: "High inventory (" + inv + " units) supports a lower price to move stock." });
+    else reasons.push({ icon: "→", tone: "flat", text: "Inventory level (" + inv + " units) is balanced — no inventory-driven change needed." });
+
+    /* competitor */
+    if (comp != null) {
+      var gap = (comp - rec.recommended_price) / rec.recommended_price;
+      if (gap > 0.05) reasons.push({ icon: "↗", tone: "up", text: "Competitors price at " + fmtMoney(comp) + ", " + Math.round(gap * 100) + "% above ours — room to raise the price." });
+      else if (gap < -0.05) reasons.push({ icon: "↘", tone: "down", text: "Competitors price at " + fmtMoney(comp) + ", " + Math.round(Math.abs(gap) * 100) + "% below ours — stay competitive." });
+      else reasons.push({ icon: "→", tone: "flat", text: "Our price is aligned with the competitor price of " + fmtMoney(comp) + "." });
+    }
+
+    /* season */
+    var month = +opts.month || new Date().getMonth() + 1;
+    var season = SEASONAL[month] || 1;
+    if (season > 1.2) reasons.push({ icon: "↗", tone: "up", text: "Peak season (" + MONTH_NAMES[month - 1] + ", factor " + season + ") justifies a higher price." });
+    else if (season < 0.9) reasons.push({ icon: "↘", tone: "down", text: "Off-peak season (" + MONTH_NAMES[month - 1] + ", factor " + season + ") — a lower price keeps demand flowing." });
+
+    /* margin */
+    var margin = (rec.recommended_price - cost) / rec.recommended_price;
+    if (margin > 0.55) reasons.push({ icon: "✓", tone: "up", text: "Healthy margin (" + Math.round(margin * 100) + "%) at the recommended price of " + fmtMoney(rec.recommended_price) + "." });
+    else if (margin < 0.2) reasons.push({ icon: "!", tone: "down", text: "Tight margin (" + Math.round(margin * 100) + "%) — the recommendation protects the cost floor of " + fmtMoney(cost) + "." });
+
+    return {
+      recommended_price: rec.recommended_price,
+      reasons: reasons,
+      base: base,
+      delta_pct: Math.round((rec.recommended_price - base) / base * 1000) / 10,
+    };
+  }
+
+  /* Prediction table for the whole catalogue (requirement #2: clear results
+   * table + CSV download). */
+  function predictionTable() {
+    var a = computeIfNeeded();
+    return a.productList.map(function (p) {
+      var rec = optimizePrice(p, {});
+      return {
+        product_id: p.product_id, category: p.category,
+        base_price: p.base_price, recommended_price: rec.recommended_price,
+        price_change_pct: Math.round((rec.recommended_price - p.base_price) / p.base_price * 1000) / 10,
+        expected_demand: rec.expected_demand, expected_revenue: rec.expected_revenue,
+      };
+    });
+  }
+
   function pad2(n) { return (n < 10 ? "0" : "") + n; }
   function argmax(obj) {
     var best = null, bestV = -Infinity;
@@ -645,7 +799,7 @@
       recommended_price: rec, cost: Math.round(cost * 100) / 100,
       expected_demand: dem, expected_revenue: revenue,
       competitor_price: Math.round(comp * 100) / 100,
-      inventory: Math.round(inv), currency: CURRENCY,
+      inventory: Math.round(inv), currency: CURRENCY_CODE,
     };
   }
 
@@ -667,7 +821,10 @@
       d = d * (0.85 + 0.3 * press);
       return Math.max(0, d);
     };
-    var rawD = demandAt(eff);
+    /* Allow an explicit observed demand (units) to override the model for the
+     * "current" scenario while the optimum still uses the trained model. */
+    var observed = fields.demand != null ? +fields.demand : null;
+    var rawD = observed != null ? observed : demandAt(eff);
     var demand = Math.min(Math.round(rawD * 10) / 10, inv);
 
     /* grid search for the optimal (revenue-max) price */
@@ -708,6 +865,11 @@
       return { discount: d, price: Math.round(p * 100) / 100, demand: gd };
     });
 
+    var reasons = recommendReasons(null, {
+      price: eff, cost: cost, inventory: inv, competitor_price: comp,
+      demand_pressure: press, month: month,
+    });
+
     return {
       input: fields,
       current: { price: Math.round(eff * 100) / 100, demand: demand, revenue: revenue, profit: profit, margin_pct: eff > 0 ? Math.round((eff - cost) / eff * 1000) / 10 : 0 },
@@ -719,8 +881,10 @@
       },
       discount_grid: grid,
       feature_impacts: impacts,
+      reasons: reasons.reasons,
       confidence_pct: confidence,
-      currency: CURRENCY,
+      model: model ? { name: "Linear Regression (ridge)", backbone: model.backbone, r2: model.r2, mae: model.mae, rmse: model.rmse } : null,
+      currency: CURRENCY_CODE,
     };
   }
 
@@ -850,7 +1014,7 @@
     var a = state.analytics;
     var customers = synthCustomers(a.segments_total);
     var bundle = {
-      currency: CURRENCY,
+      currency: CURRENCY, currencyCode: CURRENCY_CODE,
       products: a.productList.map(function (p) {
         return { product_id: p.product_id, base_price: p.base_price, cost: p.cost, category: p.category };
       }),
@@ -934,21 +1098,21 @@
     parts.push("The " + (getState().source === "upload" ? "uploaded" : "demo") + " dataset contains " + records +
       " sales records across " + a.products + " products over " + a.months + " months.");
     var topP = a.top_profit[0];
-    if (topP) parts.push("Product " + topP.product_id + " generates the highest profit (" + CURRENCY + topP.profit.toLocaleString("en-IN") + ").");
+    if (topP) parts.push("Product " + topP.product_id + " generates the highest profit (" + fmtMoney(topP.profit, 0) + ").");
     var bestCat = a.best_revenue_category;
-    if (bestCat && bestCat.name) parts.push("The " + bestCat.name + " category leads revenue (" + CURRENCY + bestCat.revenue.toLocaleString("en-IN") + ").");
+    if (bestCat && bestCat.name) parts.push("The " + bestCat.name + " category leads revenue (" + fmtMoney(bestCat.revenue, 0) + ").");
     parts.push("Demand peaks in " + MONTH_NAMES[+a.best_month - 1] + " (" + a.monthly_sales[a.best_month].toLocaleString("en-IN") +
       " units) and is weakest in " + MONTH_NAMES[+a.worst_month - 1] + ".");
     if (a.holiday_impact_pct) parts.push("Holiday periods lift average demand by " + a.holiday_impact_pct + "% vs. normal days, and weekends average " +
       a.weekend_units + " units/day vs " + a.weekday_units + " on weekdays.");
     var m = a.model;
-    if (m) parts.push("A client-side demand model reached R² " + m.r2 + " (MAE " + m.mae + " units) in " + m.trainingTimeMs + " ms across " + m.features.length + " features.");
+    if (m) parts.push("A client-side " + m.name + " model reached R² " + m.r2 + " (MAE " + m.mae + " units) in " + m.trainingTimeMs + " ms across " + m.features.length + " features.");
     var best = a.productList.length ? optimizePrice(a.productList[0], {}) : null;
     if (best) {
       var base = a.productList[0].base_price;
       var delta = Math.round((best.recommended_price - base) / base * 1000) / 10;
       parts.push("For " + a.productList[0].product_id + ", revenue is expected to " + (delta >= 0 ? "increase" : "decrease") +
-        " by " + Math.abs(delta) + "% if the recommended price (" + CURRENCY + best.recommended_price + ") is applied.");
+        " by " + Math.abs(delta) + "% if the recommended price (" + fmtMoney(best.recommended_price) + ") is applied.");
     }
     return parts.join(" ");
   }
@@ -1033,6 +1197,14 @@
 
   var PricingData = {
     CURRENCY: CURRENCY,
+    setCurrency: setCurrency,
+    getCurrency: getCurrency,
+    fmtMoney: fmtMoney,
+    basicStats: basicStats,
+    countDuplicates: countDuplicates,
+    datasetReport: datasetReport,
+    recommendReasons: recommendReasons,
+    predictionTable: predictionTable,
     MONTH_NAMES: MONTH_NAMES,
     SEASONAL: SEASONAL,
     mulberry: mulberry,
@@ -1065,6 +1237,7 @@
     meta: function () { return state.meta; },
     analytics: function () { return computeIfNeeded(); },
     rows: function () { computeIfNeeded(); return state.normalized; },
+    report: function () { computeIfNeeded(); return datasetReport(state.normalized); },
     applyUpload: applyUpload,
     applyDemo: applyDemo,
     refreshModel: refreshModel,

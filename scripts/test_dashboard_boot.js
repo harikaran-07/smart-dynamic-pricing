@@ -80,15 +80,30 @@ function load(file) {
   load("charts.js");
   load("engine.js");
   load("analytics.js");
+  load("predict.js");
   load("upload.js");
 
   assert(typeof win.PricingCharts === "object" && typeof win.PricingCharts.Chart === "function", "PricingCharts.Chart defined");
   assert(typeof win.PricingData === "object" && typeof win.PricingData.analytics === "function", "PricingData defined");
+  assert(typeof win.PricingData.setCurrency === "function" && typeof win.PricingData.fmtMoney === "function", "currency API exposed (setCurrency/fmtMoney)");
 
   let bootErr = null;
   try { win.PricingAnalytics.mount(); } catch (e) { bootErr = e; }
   assert(!bootErr, "PricingAnalytics.mount() boots without throwing" + (bootErr ? " — " + bootErr.message : ""));
   assert(els["px-root"].children.length > 0, "analytics panel rendered into #px-root");
+
+  bootErr = null;
+  try { win.PricingPredict.mount(); } catch (e) { bootErr = e; }
+  assert(!bootErr, "PricingPredict.mount() boots without throwing" + (bootErr ? " — " + bootErr.message : ""));
+  assert(els["predict-root"].children.length > 0, "prediction center rendered into #predict-root");
+  assert(typeof win.PricingPredict.getMode === "function" && win.PricingPredict.getMode() === "dataset", "prediction center defaults to Dataset Mode");
+
+  bootErr = null;
+  try { win.PricingPredict.setMode("manual"); win.PricingPredict.render(); } catch (e) { bootErr = e; }
+  assert(!bootErr, "PricingPredict Manual Mode renders without throwing" + (bootErr ? " — " + bootErr.message : ""));
+  bootErr = null;
+  try { win.PricingPredict.setMode("dataset"); win.PricingPredict.render(); } catch (e) { bootErr = e; }
+  assert(!bootErr, "PricingPredict back to Dataset Mode renders" + (bootErr ? " — " + bootErr.message : ""));
 
   bootErr = null;
   try { win.PricingUI.boot(); } catch (e) { bootErr = e; }
@@ -115,6 +130,28 @@ function load(file) {
   assert(a.records === 2 && a.products === 2, "analytics reflects uploaded rows (" + a.records + "/" + a.products + ")");
   assert(win.PricingData.assistantBundle() && win.PricingData.assistantBundle().products.length === 2, "assistant bundle built from uploaded data");
   assert(/A1/.test(P.insightText(a)), "AI summary mentions uploaded product");
+
+  // currency: INR lakh formatting + exchange rate
+  const cur = P.setCurrency("INR", 83);
+  assert(cur.code === "INR" && cur.symbol === "₹" && cur.rate === 83, "setCurrency switches to INR with custom rate");
+  assert(P.fmtMoney(125000, 0) === "₹1,03,75,000", "INR formats lakh grouping (₹1,03,75,000 for 125000 USD)");
+  assert(/₹/.test(P.fmtMoney(49.99, 2)), "INR symbol appears in fmtMoney");
+  P.setCurrency("USD", 1);
+  assert(P.fmtMoney(49.99, 2) === "$49.99", "USD formats with $ symbol");
+
+  // new dataset analytics functions
+  const report = P.report();
+  assert(typeof report.size === "number" && typeof report.duplicates === "number", "report exposes size + duplicates");
+  assert(report.stats && report.stats.price && report.stats.price.min >= 0, "report exposes basic statistics (min/max/avg)");
+  assert(Array.isArray(report.preview) && report.preview.length >= 1, "report includes a dataset preview");
+
+  const reasons = P.recommendReasons(P.analytics().productList[0], { inventory: 50, demand_pressure: 0.5 });
+  assert(Array.isArray(reasons.reasons) && reasons.reasons.length >= 3, "recommendReasons returns dynamic explanations");
+  assert(typeof reasons.recommended_price === "number" && typeof reasons.delta_pct === "number", "recommendReasons returns price + delta");
+
+  const predTable = P.predictionTable();
+  assert(Array.isArray(predTable) && predTable.length === a.products, "predictionTable returns one row per product");
+  assert(predTable[0].recommended_price > 0 && predTable[0].price_change_pct !== undefined, "prediction rows carry recommended price + change");
 
   // upload.js refreshEverything wiring
   let refreshed = false;
