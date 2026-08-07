@@ -176,21 +176,16 @@ const fakeD = {
 
   await sleep(60); // let init() buildD + welcome message resolve
 
-  assert(typeof els["ai-tab-manual"].onclick === "function", "Manual tab handler attached");
-  assert(typeof els["ai-tab-dataset"].onclick === "function", "Dataset tab handler attached");
   assert(typeof els["ai-send"].onclick === "function", "Send handler attached");
-  assert(typeof els["ai-predict"].onclick === "function", "Predict handler attached");
   assert(typeof els["ai-ds-chips"].onclick === "function", "Chips handler attached");
   assert(els["ai-chat"].children.length >= 1, "welcome message rendered (" + els["ai-chat"].children.length + " msgs)");
-  assert(els["m-category"].options.length > 0, "manual category populated (" + els["m-category"].options.length + " cats)");
-  assert(els["m-month"].options.length === 12, "manual month populated (12)");
+  assert(/I am AI, I'm here to help you/.test(els["ai-chat"].children[0].innerHTML),
+    "welcome message names the assistant \"I am AI, I'm here to help you\"");
+  assert(!els["ai-tab-manual"] && !els["ai-tab-dataset"], "mode tabs removed from the chat box");
+  assert(!els["ai-predict"] && !els["m-price"], "manual form removed from the chat box");
+  assert(!/demo simulation/.test(els["ai-chat"].children[0].innerHTML), "demo-mode note removed from the chat box");
 
-  // switch to Manual mode
-  els["ai-tab-manual"].onclick();
-  assert(els["ai-pane-manual"].style.display === "" && els["ai-pane-dataset"].style.display === "none",
-    "switching to Manual mode shows the manual pane");
-
-  // dataset question through the chat
+  // chat question through the chat
   const before = els["ai-chat"].children.length;
   els["ai-input"].value = "Forecast next 30 days";
   els["ai-send"].onclick();
@@ -201,19 +196,11 @@ const fakeD = {
     console.error("  [debug] chat children:\n" + els["ai-chat"].children.map(c => String(c.className) + " :: " + String(c.innerHTML).slice(0, 90)).join("\n"));
   }
   assert(els["ai-chat"].children.length > before && bot && /Reasoning|Answer/.test(bot.innerHTML),
-    "dataset chat question produces a 5-part bot reply");
+    "chat question produces a 5-part bot reply");
 
-  // manual predict
-  doc.getElementById("m-price").value = "49.99"; doc.getElementById("m-cost").value = "22";
-  doc.getElementById("m-inv").value = "50"; doc.getElementById("m-comp").value = "55";
-  doc.getElementById("m-pressure").value = "0.5";
-  const n0 = els["ai-chat"].children.length;
-  els["ai-predict"].onclick();
-  await sleep(60);
-  const bots2 = els["ai-chat"].children.filter(m => String(m.className).includes("bot"));
-  const last = bots2[bots2.length - 1];
-  assert(els["ai-chat"].children.length > n0 && /Answer|Reasoning/.test(String(last.innerHTML)),
-    "Manual predict posts a structured reply");
+  // welcome-mode reply must not mention Dataset/Manual modes
+  const hello = await AICore.answer("hello", "dataset", {}, fakeD);
+  assert(!/Mode/i.test(hello.answer + hello.reasoning), "hello reply has no Dataset/Manual mode note");
 
   process.exit(fails ? 1 : 0);
 })();

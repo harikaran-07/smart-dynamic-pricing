@@ -1,9 +1,5 @@
 /* AI Pricing Assistant — Smart Dynamic Pricing Dashboard
  *
- * Two modes:
- *   dataset : answers about a selected product using stored dataset values
- *   manual  : validates manual inputs, predicts, and recommends a price
- *
  * The core engine (AICore.answer) is pure: it takes a question, mode,
  * context and a data bundle and returns the 5-part response
  * (Answer / Reasoning / Business Impact / Recommended Action / Confidence).
@@ -106,7 +102,7 @@ const AICore = {
         answer: "I could not compute that with the available data right now.",
         reasoning: "Detail: " + (e && e.message ? e.message : String(e)),
         businessImpact: "No change recommended until the input is corrected.",
-        action: "Re-run the request, or switch the mode and provide the missing inputs.",
+        action: "Re-run the request.",
         confidence: "Low", confidencePct: 15,
       };
     }
@@ -118,11 +114,9 @@ const AICore = {
       const ins = D.insights || {};
       return {
         intent: "hello", mode,
-        answer: "I am the Smart Dynamic Pricing assistant. I can explain pricing recommendations, forecast demand, and surface profit, inventory, segment, seasonal, ML and RL insights from your live dashboard data.",
+        answer: "I am AI, I'm here to help you. I can explain pricing recommendations, forecast demand, and surface profit, inventory, segment, seasonal, ML and RL insights from your live dashboard data.",
         reasoning: "Currently loaded: " + (ins.product_count || D.products?.length || 0) +
-          " products, " + (D.customers ? D.customers.length : 0) + " customers, and full sales-history aggregates. " +
-          (mode === "dataset" ? "You are in Dataset Mode — I use stored values for the selected product." :
-            "You are in Manual Mode — I predict from the fields you entered."),
+          " products, " + (D.customers ? D.customers.length : 0) + " customers, and full sales-history aggregates.",
         businessImpact: "Faster, data-backed price and stock decisions across the catalogue.",
         action: "Try: \"Why is this product priced this way?\", \"Forecast next 30 days\", \"Which products need discounts?\", or \"What if inventory drops to 20?\".",
         confidence: "High", confidencePct: 90,
@@ -275,7 +269,7 @@ const AICore = {
           answer: "Tell me the scenario, e.g. \"What if inventory drops to 20?\", \"What if competitor price increases by 10%?\" or \"Should I offer a 15% discount?\".",
           reasoning: "I recompute demand, revenue and profit with the changed input while keeping everything else fixed.",
           businessImpact: "You can compare any single-variable scenario in seconds.",
-          action: "Re-ask with one changed input, or edit the Manual Mode form and press Predict.",
+          action: "Re-ask with one changed input.",
           confidence: "Low", confidencePct: 45,
           chips: ["What if inventory drops to 20?", "What if competitor price increases by 10%?", "Should I offer a 15% discount?"],
         };
@@ -303,10 +297,10 @@ const AICore = {
         const prod = this.product(D, pid) || {};
         return {
           intent: "manual_predict", mode,
-          answer: "I need the Manual Mode fields to predict a new product. Fill the form (price, cost, inventory, competitor, demand pressure, …) and press Predict.",
-          reasoning: "For " + (pid || "your product") + " I can already optimise from the dataset — use \"Recommend the best price\" in Dataset Mode.",
-          businessImpact: "Manual Mode lets you test launch scenarios before committing stock.",
-          action: "Switch to Manual Mode, enter the details and press Predict.",
+          answer: "I can predict for any product already in the dataset. Pick a product and ask \"Recommend the best price\".",
+          reasoning: "For " + (pid || "your product") + " I can optimise the price from the dataset.",
+          businessImpact: "Test price scenarios before committing stock.",
+          action: "Pick a product, then ask \"Recommend the best price for maximum profit\".",
           confidence: "Low", confidencePct: 40,
           chips: ["Predict demand for this new product", "Recommend the best price for maximum profit"],
         };
@@ -527,7 +521,7 @@ const AICore = {
       return {
         intent: "default", mode,
         answer: "I can help with pricing, demand, profit, segmentation, seasonality, inventory, RL and ML questions.",
-        reasoning: "Ask about a selected product (Dataset Mode) or your entered fields (Manual Mode), and I answer from the live dashboard data.",
+        reasoning: "Ask about any product in the dashboard, and I answer from the live data.",
         businessImpact: "Better decisions in seconds, backed by the trained models.",
         action: "Try a quick question below, e.g. \"Why is this price recommended?\" or \"Forecast next 30 days\".",
         confidence: "Medium", confidencePct: 55,
@@ -550,23 +544,11 @@ if (typeof document !== "undefined") {
     const css = `
     .ai-panel{background:linear-gradient(180deg,var(--card),var(--card-2));border:1px solid var(--line);
       border-radius:var(--rad);box-shadow:var(--shadow);overflow:hidden}
-    .ai-tabs{display:flex;border-bottom:1px solid var(--line)}
-    .ai-tab{flex:1;padding:13px 10px;background:transparent;border:0;color:var(--mut);font-weight:700;
-      font-size:13px;cursor:pointer;margin:0;border-radius:0;box-shadow:none;position:relative}
-    .ai-tab:hover{filter:none;background:rgba(91,140,255,.06)}
-    .ai-tab.active{color:var(--txt)}
-    .ai-tab.active::after{content:"";position:absolute;left:0;right:0;bottom:0;height:2px;
-      background:linear-gradient(90deg,var(--acc),var(--acc-2))}
     .ai-pane{padding:18px 20px;border-bottom:1px solid var(--line)}
     .ai-row{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:10px}
     .ai-row label{margin:0}
     .ai-select{max-width:170px}
     .ai-hint{font-size:12px;color:var(--faint);margin:0 0 12px}
-    .ai-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px}
-    .ai-field{margin:0}
-    .ai-field input,.ai-field select{padding:8px 10px;margin-top:4px;font-size:12.5px}
-    .ai-field.toggle{display:flex;align-items:center;gap:8px;padding-top:20px}
-    .ai-field.toggle input{width:auto;margin:0}
     .ai-chips{display:flex;flex-wrap:wrap;gap:8px}
     .ai-chip{padding:6px 12px;border-radius:999px;border:1px solid var(--line);background:#0c1220;
       color:var(--mut);font-size:12px;cursor:pointer;margin:0;width:auto;box-shadow:none;
@@ -637,38 +619,13 @@ if (typeof document !== "undefined") {
 
     root.innerHTML = `
       <div class="ai-panel">
-        <div class="ai-tabs">
-          <button class="ai-tab active" id="ai-tab-dataset">Dataset Mode</button>
-          <button class="ai-tab" id="ai-tab-manual">Manual Mode</button>
-        </div>
-        <div class="ai-pane" id="ai-pane-dataset">
+        <div class="ai-pane">
           <div class="ai-row">
             <label>Product</label>
             <select class="ai-select" id="ai-product"></select>
             <span class="ai-hint" id="ai-prod-hint">—</span>
           </div>
           <div class="ai-chips" id="ai-ds-chips"></div>
-        </div>
-        <div class="ai-pane" id="ai-pane-manual" style="display:none">
-          <p class="ai-hint">Enter product details manually — the AI validates, predicts demand and recommends a price.</p>
-          <div class="ai-grid">
-            <div class="ai-field"><label>Product name</label><input id="m-name" value="New Product"/></div>
-            <div class="ai-field"><label>Category</label><select id="m-category"></select></div>
-            <div class="ai-field"><label>Current price</label><input id="m-price" type="number" value="49.99"/></div>
-            <div class="ai-field"><label>Cost price</label><input id="m-cost" type="number" value="22.00"/></div>
-            <div class="ai-field"><label>Inventory</label><input id="m-inv" type="number" value="50"/></div>
-            <div class="ai-field"><label>Competitor price</label><input id="m-comp" type="number" value="55.00"/></div>
-            <div class="ai-field"><label>Discount %</label><input id="m-disc" type="number" value="0" min="0" max="50"/></div>
-            <div class="ai-field"><label>Demand pressure (0–1)</label><input id="m-pressure" type="number" value="0.5" step="0.1"/></div>
-            <div class="ai-field"><label>Marketing spend</label><input id="m-mkt" type="number" value="0"/></div>
-            <div class="ai-field"><label>Customer rating</label><input id="m-rating" type="number" value="4.2" step="0.1"/></div>
-            <div class="ai-field"><label>Season</label><select id="m-season"><option>Normal</option><option>Summer</option><option>Winter</option><option>Monsoon</option><option>Festival</option></select></div>
-            <div class="ai-field"><label>Month</label><select id="m-month"></select></div>
-            <div class="ai-field"><label>Day of week</label><select id="m-dow"></select></div>
-            <div class="ai-field toggle"><label class="ai-hint">Holiday</label><input id="m-holiday" type="checkbox"/></div>
-            <div class="ai-field toggle"><label class="ai-hint">Weekend</label><input id="m-weekend" type="checkbox"/></div>
-          </div>
-          <button id="ai-predict">Predict &amp; Recommend Price</button>
         </div>
         <div class="ai-chat" id="ai-chat"></div>
         <div class="ai-input">
@@ -701,7 +658,7 @@ if (typeof document !== "undefined") {
 
     function renderReply(r) {
       const confCls = (r.confidencePct || 0) >= 75 ? "high" : (r.confidencePct || 0) >= 50 ? "medium" : "low";
-      let html = `<div class="ai-intent">${esc(r.intent)} · ${esc(r.mode)} mode</div>`;
+      let html = `<div class="ai-intent">${esc(r.intent)}</div>`;
       html += `<div>${esc(r.answer)}</div>`;
       if (r.reasoning) html += `<div class="ai-sec"><span class="t">Reasoning</span><p>${esc(r.reasoning)}</p></div>`;
       if (r.businessImpact) html += `<div class="ai-sec"><span class="t">Business Impact</span><p>${esc(r.businessImpact)}</p></div>`;
@@ -746,55 +703,6 @@ if (typeof document !== "undefined") {
     }
     psel.onchange = () => { updateHint(); };
 
-    // manual form fill (populated once data is loaded in init())
-    function fillManualForm() {
-      const catSel = $("m-category");
-      catSel.innerHTML = "";
-      (D.products || []).forEach(p => {
-        if (!Array.prototype.find.call(catSel.options, o => o.value === p.category))
-          catSel.add(new Option(p.category, p.category));
-      });
-      if (!catSel.options.length) catSel.add(new Option("General", "General"));
-      const msel = $("m-month"), dsel = $("m-dow");
-      AICore.monthNames.forEach((m, i) => msel.add(new Option(m, i + 1)));
-      msel.value = String(new Date().getMonth() + 1);
-      const dw = ["Mon","Tue","Wed","Thu","Fri","Sat","Sun"];
-      dw.forEach((d, i) => dsel.add(new Option(d, i)));
-      dsel.value = "5";
-    }
-
-    function readManual() {
-      return {
-        product_name: $("m-name").value || "New Product",
-        category: $("m-category").value || "General",
-        price: +$("m-price").value, cost: +$("m-cost").value,
-        inventory: +$("m-inv").value, competitor: +$("m-comp").value || null,
-        discount_pct: +$("m-disc").value || 0, demand_pressure: +$("m-pressure").value || 0.5,
-        marketing_spend: +$("m-mkt").value || 0, customer_rating: +$("m-rating").value || 4,
-        season: $("m-season").value, holiday: $("m-holiday").checked,
-        weekend: $("m-weekend").checked ? 1 : 0, month: +$("m-month").value, dow: +$("m-dow").value,
-      };
-    }
-
-    $("ai-predict").onclick = async () => {
-      const m = readManual();
-      if (!(m.price > 0 && m.cost > 0)) { addMsg("bot", "Validation failed: price and cost must be positive."); return; }
-      state.mode = "manual"; state.manual = m;
-      await ask("Predict demand for this new product and recommend the best price for maximum profit.");
-    };
-
-    // tabs
-    $("ai-tab-dataset").onclick = () => {
-      state.mode = "dataset";
-      $("ai-tab-dataset").classList.add("active"); $("ai-tab-manual").classList.remove("active");
-      $("ai-pane-dataset").style.display = ""; $("ai-pane-manual").style.display = "none";
-    };
-    $("ai-tab-manual").onclick = () => {
-      state.mode = "manual";
-      $("ai-tab-manual").classList.add("active"); $("ai-tab-dataset").classList.remove("active");
-      $("ai-pane-manual").style.display = ""; $("ai-pane-dataset").style.display = "none";
-    };
-
     // chips
     const dsChips = [
       "Why is this price recommended?", "Should I increase the price?",
@@ -816,15 +724,14 @@ if (typeof document !== "undefined") {
       try {
         D = await buildD();
         fillProducts();
-        fillManualForm();
         const ms = D.insights && D.insights.monthly_sales;
         const peak = ms && AICore.highestMonth(D);
         addMsg("bot",
           `<div class="ai-intent">assistant · ${D.products.length} products loaded</div>
-           <div>Welcome! Ask me anything about pricing, demand, profit, inventory, segments, seasonality, RL or the ML models.</div>
+           <div>I am AI, I'm here to help you. Ask me anything about pricing, demand, profit, inventory, segments, seasonality, RL or the ML models.</div>
            <div class="ai-sec"><span class="t">Context</span><p>${D.products.length} products · ${D.customers.length} customers · ` +
           (peak ? `peak month ${AICore.monthNames[+peak - 1]}` : "dashboard data") +
-          ` · ${D.overview && D.overview.model_backbone ? D.overview.model_backbone.toUpperCase() + " backbone" : "demo simulation"}</p></div>`,
+          ` · ${D.overview && D.overview.model_backbone ? D.overview.model_backbone.toUpperCase() + " backbone" : "live data"}</p></div>`,
           ["Why is this price recommended?", "Which products need discounts?", "Inventory risk", "Best product to promote"]);
       } catch (e) {
         addMsg("bot", "Could not load assistant data: " + esc(e && e.message ? e.message : String(e)));
