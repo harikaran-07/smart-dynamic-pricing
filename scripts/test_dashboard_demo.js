@@ -1,14 +1,13 @@
 /* Node harness that verifies:
- *  1. the inline demoAPI (extracted from dashboard/index.html) serves the new
- *     assistant endpoints (products/detail, customers/detail, insights, manual);
- *  2. the AICore engine returns well-formed 5-part answers for many intents.
+ *  1. the AICore engine returns well-formed 5-part answers for many intents;
+ *  2. assistant.js's UI IIFE bootstraps against an api() shim (no backend,
+ *     no built-in demo simulation) and answers questions through the chat.
  */
 "use strict";
 const fs = require("fs");
 const path = require("path");
 const { AICore } = require(path.join(__dirname, "..", "dashboard", "assistant.js"));
 const ROOT = path.resolve(__dirname, "..");
-const indexHtml = fs.readFileSync(path.join(ROOT, "dashboard", "index.html"), "utf8");
 
 let fails = 0;
 function assert(cond, msg) {
@@ -16,52 +15,7 @@ function assert(cond, msg) {
   else console.log("  ✓ " + msg);
 }
 
-// ---- extract the inline script (before assistant.js tag) --------------
-const start = indexHtml.indexOf("<script>") + "<script>".length;
-const end = indexHtml.indexOf("</script>", start);
-let inline = indexHtml.slice(start, end);
-inline = inline.replace(/^\s*init\(\);\s*health\(\);\s*$/m, ""); // don't run DOM boot
-
-// ---- build a sandbox with the constants/functions we need -------------
-const elProxy = new Proxy({}, {
-  get(t, p) { if (typeof p === "string" && p !== "then") return () => ({}); return undefined; },
-  set() { return true; },
-  has() { return true; },
-});
-globalThis.document = {
-  getElementById: () => elProxy, querySelector: () => elProxy, createElement: () => elProxy,
-  head: { appendChild: () => {} }, addEventListener: () => {}, body: elProxy,
-};
-globalThis.window = globalThis;
-const sandbox = {};
-const fn = new Function(
-  "module",
-  inline + "\n;globalThis.__demo = { DEMO_PRODUCTS, DEMO_CUSTOMERS, demoApi, demoProduct, demoCustomer, mulberry, clamp };"
-);
-fn(sandbox);
-const D = globalThis.__demo;
-
-// ---- 1. new demo endpoints ---------------------------------------------
-(async () => {
-  console.log("demo endpoints (products/detail, customers/detail, insights, manual)");
-  const pd = await D.demoApi("/api/products/detail");
-  assert(Array.isArray(pd) && pd.length && pd[0].base_price > 0 && pd[0].cost > 0, "products/detail returns product rows");
-  const cd = await D.demoApi("/api/customers/detail");
-  assert(Array.isArray(cd) && cd.every(c => c.segment_label && c.loyalty_tier), "customers/detail returns segments");
-  const ins = await D.demoApi("/api/insights");
-  assert(ins.top_profit && ins.top_profit.length && ins.monthly_sales && ins.best_month, "insights aggregates present");
-  assert(ins.low_stock && ins.overstock && Array.isArray(ins.inventory), "insights inventory flags present");
-  const man = await D.demoApi("/api/manual", { price: 49.99, cost: 22, inventory: 50, demand_pressure: 0.5 });
-  assert(man.current && man.current.revenue > 0 && man.current.price > 0, "manual returns current scenario");
-  assert(man.optimal && man.optimal.recommended_price > 0 && typeof man.optimal.price_delta_pct === "number", "manual returns optimal");
-  assert(Array.isArray(man.discount_grid) && man.discount_grid.length === 5 && man.discount_grid.every(x => x.discount != null), "manual discount_grid has 5 entries");
-  assert(Array.isArray(man.feature_impacts) && man.feature_impacts.length >= 3, "manual feature impacts present");
-  assert(Array.isArray(man.reasons) && man.reasons.length >= 3 && man.reasons.every(r => r.text && r.tone), "demo manual returns dynamic reasons");
-  assert(man.model && man.model.name && typeof man.model.r2 === "number", "demo manual reports the model used");
-  assert(Number.isInteger(man.confidence_pct) && man.confidence_pct >= 0, "manual confidence_pct is an integer");
-})();
-
-// ---- 2. AICore engine ----------------------------------------------------
+// ---- 1. AICore engine ----------------------------------------------------
 const fakeD = {
   currency: "$",
   products: [
@@ -126,7 +80,7 @@ const fakeD = {
   assert(whatif.intent === "whatif" && /profit|demand/i.test(whatif.answer), "what-if scenario reply");
 })();
 
-// ---- 3. browser bootstrap: run assistant.js's UI IIFE against a DOM shim --
+// ---- 2. browser bootstrap: run assistant.js's UI IIFE against a DOM shim --
 (async () => {
   console.log("== assistant.js browser bootstrap (DOM shim) ==");
   const sleep = (ms) => new Promise(r => setTimeout(r, ms));
@@ -161,8 +115,21 @@ const fakeD = {
   };
   const Option = function (text, value) { this.text = text; this.value = value; };
 
-  // api shim backed by the demo endpoints extracted from index.html
-  const apiShim = async (path, body) => D.demoApi(path, body);
+  // api shim: serves the assistant endpoints without any backend or demo mode
+  const apiShim = async (p, body) => {
+    p = String(p || "").replace(/^\/api\//, "");
+    if (p === "products/detail") return fakeD.products;
+    if (p === "customers/detail") return fakeD.customers;
+    if (p === "insights") return fakeD.insights;
+    if (p === "overview") return fakeD.overview;
+    if (p === "price") return fakeD.price(body);
+    if (p === "rl-price") return fakeD.rl(body);
+    if (p === "negotiate") return fakeD.negotiate(body);
+    if (p === "manual") return fakeD.manual(body);
+    if (p.startsWith("sales/")) return fakeD.sales(p.slice(6));
+    if (p === "explain") return fakeD.explain();
+    throw new Error("Unknown endpoint: " + p);
+  };
 
   // run assistant.js in a fresh scope where the IIFE bootstraps
   const src = fs.readFileSync(path.join(ROOT, "dashboard", "assistant.js"), "utf8");

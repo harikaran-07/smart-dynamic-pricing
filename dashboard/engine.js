@@ -2,7 +2,6 @@
  * Smart Dynamic Pricing dashboard.
  *
  * Responsibilities:
- *   - deterministic demo dataset generation (works offline / on Pages)
  *   - CSV / Excel parsing, schema validation, column mapping, normalisation
  *   - data cleaning (missing values), feature scaling, client-side linear
  *     regression model, R²/MAE/RMSE + training time
@@ -27,14 +26,7 @@
     };
   }
 
-  var DEMO_PRODUCTS = [
-    ["P001", 146.90, 63.24, "Electronics"], ["P002", 38.50, 18.95, "Apparel"],
-    ["P003", 12.99, 5.60, "Beauty"], ["P004", 74.00, 36.10, "Home & Kitchen"],
-    ["P005", 29.90, 13.25, "Sports"], ["P006", 55.20, 27.80, "Apparel"],
-    ["P007", 92.40, 44.90, "Electronics"], ["P008", 18.75, 8.15, "Beauty"],
-    ["P009", 41.30, 19.60, "Sports"], ["P010", 120.00, 58.00, "Home & Kitchen"],
-    ["P011", 66.60, 31.20, "Electronics"], ["P012", 24.40, 10.90, "Beauty"],
-  ];
+  var SYNTH_CATEGORIES = ["Electronics", "Apparel", "Beauty", "Home & Kitchen", "Sports"];
 
   /* Seasonal curve per month (index 1..12). */
   var SEASONAL = { 1: 1.12, 2: 0.92, 3: 1.0, 4: 1.02, 5: 0.96, 6: 0.84, 7: 0.78, 8: 0.88, 9: 1.08, 10: 1.32, 11: 1.5, 12: 1.24 };
@@ -73,54 +65,6 @@
     return CURRENCY + Number(v).toLocaleString(CURRENCY_LOCALE, {
       maximumFractionDigits: decimals == null ? 2 : decimals,
     });
-  }
-
-  /* ------------------------------------------------------------------ */
-  /* demo dataset generation                                            */
-  /* ------------------------------------------------------------------ */
-  function generateDemoDataset(days) {
-    days = days || 365;
-    var rnd = mulberry(20260701);
-    var rows = [];
-    var today = new Date();
-    today.setHours(12, 0, 0, 0);
-    var i, p, d, day, product;
-    for (i = 0; i < DEMO_PRODUCTS.length; i++) {
-      p = DEMO_PRODUCTS[i];
-      var base = 8 + Math.round(rnd() * 26);
-      var phase = rnd() * Math.PI * 2;
-      var inv = 60 + Math.round(rnd() * 300);
-      for (d = days - 1; d >= 0; d--) {
-        var dt = new Date(today.getTime() - d * 86400000);
-        var month = dt.getMonth() + 1;
-        var dayOfMonth = dt.getDate();
-        var dow = dt.getDay();
-        var isWeekend = dow === 0 || dow === 6;
-        var holiday = (month === 11) || (month === 12 && dayOfMonth >= 20) ||
-          (month === 1 && dayOfMonth <= 5) || (month === 4 && dayOfMonth >= 10 && dayOfMonth <= 15) ? 1 : 0;
-        var seas = SEASONAL[month] * (0.85 + 0.3 * Math.sin(phase + month / 12 * Math.PI * 2));
-        var noise = 0.82 + rnd() * 0.36;
-        var units = Math.max(1, Math.round(base * seas * (isWeekend ? 1.28 : 1) * (holiday ? 1.25 : 1) * noise));
-        var price = Math.round(p[1] * (0.98 + rnd() * 0.04) * 100) / 100;
-        var comp = Math.round(p[1] * 1.04 * (0.97 + rnd() * 0.06) * 100) / 100;
-        inv = Math.max(4, Math.min(700, Math.round(inv - units + 15 + rnd() * 16)));
-        rows.push({
-          product_id: p[0],
-          date: dt.toISOString().slice(0, 10),
-          category: p[3],
-          price: price,
-          cost: p[2],
-          competitor_price: comp,
-          inventory: inv,
-          units_sold: units,
-          is_weekend: isWeekend ? 1 : 0,
-          month: month,
-          seasonal_factor: Math.round(seas * 100) / 100,
-          holiday: holiday,
-        });
-      }
-    }
-    return rows;
   }
 
   /* ------------------------------------------------------------------ */
@@ -654,6 +598,9 @@
   /* dataset report (analytics panel requirement #7)                    */
   /* ------------------------------------------------------------------ */
   function datasetReport(rows) {
+    if (!rows) {
+      return { size: 0, features: FEATURES.length, missingValues: 0, duplicates: 0, stats: {}, preview: [] };
+    }
     var report = {
       size: rows.length,
       features: FEATURES.length,
@@ -733,6 +680,7 @@
    * table + CSV download). */
   function predictionTable() {
     var a = computeIfNeeded();
+    if (!a) return [];
     return a.productList.map(function (p) {
       var rec = optimizePrice(p, {});
       return {
@@ -770,7 +718,7 @@
   function optimizePrice(product, opts) {
     opts = opts || {};
     var analytics = computeIfNeeded();
-    var model = analytics.model;
+    var model = analytics ? analytics.model : null;
     var press = opts.demand_pressure != null ? opts.demand_pressure : 0.5;
     var inv = opts.inventory != null ? opts.inventory : (product ? product.inventory : 50);
     var comp = opts.competitor_price != null ? opts.competitor_price : (product ? product.competitor_price : product.base_price * 1.03);
@@ -805,7 +753,7 @@
 
   function manualPredict(fields) {
     var analytics = computeIfNeeded();
-    var model = analytics.model;
+    var model = analytics ? analytics.model : null;
     var price = +fields.price, cost = +fields.cost;
     var comp = fields.competitor || price * 1.03;
     var inv = fields.inventory != null ? fields.inventory : 50;
@@ -930,6 +878,7 @@
 
   function salesSeries(pid) {
     var analytics = computeIfNeeded();
+    if (!analytics) return { product_id: pid, dates: [], units_sold: [] };
     var prod = analytics.productList.filter(function (p) { return p.product_id === pid; })[0];
     if (!prod) return { product_id: pid, dates: [], units_sold: [] };
     var days = Object.keys(prod.daily).sort();
@@ -943,7 +892,7 @@
 
   function explain() {
     var analytics = computeIfNeeded();
-    var m = analytics.model;
+    var m = analytics ? analytics.model : null;
     var top = [];
     if (m) {
       top = FEATURES.slice().sort(function (a, b) { return Math.abs(m.coefMap[b]) - Math.abs(m.coefMap[a]); })
@@ -957,6 +906,7 @@
   function demandSeries(pid, actualDays, forecastDays) {
     actualDays = actualDays || 30; forecastDays = forecastDays || 7;
     var analytics = computeIfNeeded();
+    if (!analytics) return { dates: [], actual: [], predicted: [], lower: [], upper: [], avg: 0, maxIdx: -1, minIdx: -1 };
     var model = analytics.model;
     var prod = analytics.productList.filter(function (p) { return p.product_id === pid; })[0];
     if (!prod) return { dates: [], actual: [], predicted: [], lower: [], upper: [], avg: 0, maxIdx: -1, minIdx: -1 };
@@ -1065,7 +1015,7 @@
         avg_sales: Math.round((1 + rnd() * 10) * 10) / 10,
         segment_label: bucket[0], loyalty_tier: bucket[1],
         region: ["North", "West", "South", "East"][i % 4],
-        preferred_category: DEMO_PRODUCTS[i % DEMO_PRODUCTS.length][3],
+        preferred_category: SYNTH_CATEGORIES[i % SYNTH_CATEGORIES.length],
       });
     }
     return out;
@@ -1079,12 +1029,16 @@
 
   function customerList() {
     var state = getState();
-    if (!state._customers) state._customers = synthCustomers(computeIfNeeded().segments_total);
+    if (!state._customers) {
+      var a = computeIfNeeded();
+      state._customers = synthCustomers(a ? a.segments_total : 50);
+    }
     return state._customers;
   }
 
   function productById(pid) {
     var analytics = computeIfNeeded();
+    if (!analytics) return null;
     return analytics.productList.filter(function (p) { return p.product_id === pid; })[0] || null;
   }
 
@@ -1095,7 +1049,7 @@
     if (!a) return "";
     var parts = [];
     var records = a.records.toLocaleString("en-IN");
-    parts.push("The " + (getState().source === "upload" ? "uploaded" : "demo") + " dataset contains " + records +
+    parts.push("The uploaded dataset contains " + records +
       " sales records across " + a.products + " products over " + a.months + " months.");
     var topP = a.top_profit[0];
     if (topP) parts.push("Product " + topP.product_id + " generates the highest profit (" + fmtMoney(topP.profit, 0) + ").");
@@ -1121,7 +1075,7 @@
   /* state & public API                                                 */
   /* ------------------------------------------------------------------ */
   var state = {
-    source: "demo",
+    source: "none",
     meta: null,
     normalized: null,
     missing: null,
@@ -1131,8 +1085,8 @@
   function getState() { return state; }
 
   function computeIfNeeded() {
+    if (!state.normalized) return null;
     if (!state.analytics) {
-      if (!state.normalized) { state.normalized = generateDemoDataset(); }
       state.missing = { totalMissing: 0, byColumn: {} };
       state.analytics = computeAnalytics(state.normalized, trainModel(state.normalized));
     }
@@ -1143,15 +1097,6 @@
     state.source = "upload";
     state.meta = meta;
     state.normalized = rows;
-    state.analytics = null;
-    state._customers = null;
-    computeIfNeeded();
-  }
-
-  function applyDemo() {
-    state.source = "demo";
-    state.meta = null;
-    state.normalized = null;
     state.analytics = null;
     state._customers = null;
     computeIfNeeded();
@@ -1176,6 +1121,7 @@
   function exportPredictions() {
     var a = computeIfNeeded();
     var headers = ["product_id", "category", "base_price", "cost", "recommended_price", "expected_demand", "expected_revenue", "price_change_pct", "current_revenue", "current_profit"];
+    if (!a) return { csv: toCSV(headers, []), name: "smart-pricing-predictions-" + new Date().toISOString().slice(0, 10) + ".csv" };
     var rows = a.productList.map(function (p) {
       var rec = optimizePrice(p, {});
       return [p.product_id, p.category, p.base_price, p.cost, rec.recommended_price, rec.expected_demand, rec.expected_revenue,
@@ -1208,10 +1154,8 @@
     MONTH_NAMES: MONTH_NAMES,
     SEASONAL: SEASONAL,
     mulberry: mulberry,
-    DEMO_PRODUCTS: DEMO_PRODUCTS,
     REQUIRED_FIELDS: REQUIRED_FIELDS,
     SYNONYMS: SYNONYMS,
-    generateDemoDataset: generateDemoDataset,
     parseCSV: parseCSV,
     parseExcelFile: parseExcelFile,
     suggestMapping: suggestMapping,
@@ -1239,7 +1183,6 @@
     rows: function () { computeIfNeeded(); return state.normalized; },
     report: function () { computeIfNeeded(); return datasetReport(state.normalized); },
     applyUpload: applyUpload,
-    applyDemo: applyDemo,
     refreshModel: refreshModel,
     toCSV: toCSV,
     exportPredictions: exportPredictions,

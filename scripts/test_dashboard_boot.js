@@ -91,6 +91,8 @@ function load(file) {
   try { win.PricingAnalytics.mount(); } catch (e) { bootErr = e; }
   assert(!bootErr, "PricingAnalytics.mount() boots without throwing" + (bootErr ? " — " + bootErr.message : ""));
   assert(els["px-root"].children.length > 0, "analytics panel rendered into #px-root");
+  assert(win.PricingData.analytics() === null, "no analytics before a dataset is uploaded");
+  assert(els["px-content"].children.length > 0, "analytics panel shows an empty state without data");
 
   bootErr = null;
   try { win.PricingPredict.mount(); } catch (e) { bootErr = e; }
@@ -108,7 +110,7 @@ function load(file) {
   bootErr = null;
   try { win.PricingUI.boot(); } catch (e) { bootErr = e; }
   assert(!bootErr, "PricingUI.boot() boots without throwing" + (bootErr ? " — " + bootErr.message : ""));
-  assert(typeof els["data-source"].onchange === "function", "data-source dropdown wired");
+  assert(typeof els["data-source"].onclick === "function", "Upload Dataset button wired");
 
   // switch tabs through the analytics panel
   const tabs = [];
@@ -119,7 +121,6 @@ function load(file) {
 
   // upload flow end-to-end (parse -> map -> normalize -> applyUpload)
   const P = win.PricingData;
-  P.applyDemo();
   const csv = "product,order_date,selling_price,qty\nA1,2026-03-01,20,5\nA2,2026-03-02,30,7";
   const parsed = P.parseCSV(csv);
   const mapping = P.suggestMapping(parsed.headers);

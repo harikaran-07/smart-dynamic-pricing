@@ -405,7 +405,7 @@
     var wrap = el('<div class="px-grid"></div>');
 
     var meta = P.meta();
-    var name = (meta && meta.fileName) || "Built-in sample dataset";
+    var name = (meta && meta.fileName) || "uploaded dataset";
     var stats = report.stats;
     var kpis =
       kpi("Dataset size", fmt(report.size), name) +
@@ -564,11 +564,28 @@
     return wrap;
   }
 
+  function emptyState() {
+    var d = document.createElement("div");
+    d.className = "px-empty";
+    d.innerHTML =
+      '<div class="px-empty-box">' +
+      '<h4>No dataset loaded</h4>' +
+      '<p>Upload a CSV or Excel file with the <b>Upload Dataset</b> button to see analytics, forecasts and pricing insights here.</p>' +
+      '</div>';
+    return d;
+  }
+
   function renderTab(name) {
     var content = document.getElementById("px-content");
     state.charts.forEach(function (c) { try { c.destroy(); } catch (_) {} });
     state.charts = [];
     if (!content) return;
+    var a = P.analytics();
+    if (!a) {
+      content.innerHTML = "";
+      content.appendChild(emptyState());
+      return;
+    }
     var view = null;
     if (name === "overview") view = renderOverview();
     else if (name === "dataset") view = renderDataset();
@@ -591,7 +608,7 @@
     css();
 
     var a = P.analytics();
-    state.product = a.productList[0] ? a.productList[0].product_id : "P001";
+    state.product = a && a.productList[0] ? a.productList[0].product_id : "P001";
 
     var panel = el(
       '<div class="px-panel">' +
@@ -607,7 +624,6 @@
       '</div>' +
       '<div class="px-actions">' +
       '<button class="px-btn" id="px-refresh">Refresh Model</button>' +
-      '<button class="px-btn" id="px-reset">Reset Dashboard</button>' +
       '<button class="px-btn px-primary" id="px-export">Export Predictions (CSV)</button>' +
       '</div></div>' +
       '<div class="px-content" id="px-content"></div>' +
@@ -618,8 +634,10 @@
     host.appendChild(panel);
 
     var sel = panel.querySelector("#px-product");
-    a.productList.forEach(function (p) { sel.add(new Option(p.product_id + " · " + p.category, p.product_id)); });
-    sel.value = state.product;
+    if (a) {
+      a.productList.forEach(function (p) { sel.add(new Option(p.product_id + " · " + p.category, p.product_id)); });
+      sel.value = state.product;
+    }
     sel.onchange = function () { state.product = sel.value; renderTab(state.tab); };
 
     panel.querySelector("#px-refresh").onclick = function () {
@@ -627,16 +645,6 @@
       P.refreshModel();
       renderTab(state.tab);
       root.PricingUI && root.PricingUI.toast("Model retrained", "Recomputed analytics in " + Math.round(performance.now() - t0) + " ms.", "ok");
-    };
-    panel.querySelector("#px-reset").onclick = function () {
-      P.applyDemo();
-      root.PricingUI && root.PricingUI.toast("Dashboard reset", "Reverted to the demo dataset.", "ok");
-      sel.innerHTML = "";
-      P.analytics().productList.forEach(function (p) { sel.add(new Option(p.product_id + " · " + p.category, p.product_id)); });
-      state.product = P.analytics().productList[0].product_id;
-      sel.value = state.product;
-      renderTab(state.tab);
-      root.PricingUI && root.PricingUI.onReset && root.PricingUI.onReset();
     };
     panel.querySelector("#px-export").onclick = function () {
       var e = P.exportPredictions();

@@ -1,7 +1,7 @@
 /* upload.js — Data Source control, upload workflow, notifications and UX
  * helpers for the Smart Dynamic Pricing dashboard.
  *
- * - replaces the "Demo Mode" indicator with a Data Source dropdown
+ * - replaces the old "Demo Mode" indicator with an Upload Dataset control
  * - CSV / Excel upload with progress, preview (first 10 rows), column
  *   detection, auto column mapping, and validation messages
  * - toasts, loading overlay and the reset/refresh plumbing shared by panels
@@ -313,9 +313,7 @@
   }
 
   function setDataSourceUI(kind, fileName) {
-    var sel = document.getElementById("data-source");
     var badge = document.getElementById("ds-badge");
-    if (sel) sel.value = kind;
     if (badge) {
       if (kind === "upload") {
         badge.style.display = "inline-flex";
@@ -332,18 +330,8 @@
     modalEl();
     ensureToasts();
 
-    var sel = document.getElementById("data-source");
-    if (sel) {
-      sel.onchange = function () {
-        if (sel.value === "upload") { openModal(); sel.value = "demo"; }
-        else if (sel.value === "demo") {
-          P.applyDemo();
-          setDataSourceUI("demo");
-          toast("Demo dataset active", "Using the built-in sample dataset.", "ok");
-          refreshEverything();
-        }
-      };
-    }
+    var btn = document.getElementById("data-source");
+    if (btn) btn.onclick = openModal;
   }
 
   root.PricingUI = {

@@ -131,10 +131,7 @@
     </select>
     <input id="currency-rate" class="rate-input" type="number" step="0.01" min="0" value="83"
       title="Exchange rate (1 USD = ? INR)" style="display:none"/>
-    <select id="data-source" class="ds-select">
-      <option value="demo">Sample Dataset</option>
-      <option value="upload">Upload Dataset</option>
-    </select>
+    <button id="data-source" class="ds-select" title="Upload a CSV or Excel dataset">Upload Dataset</button>
     <span id="ds-badge" class="ds-badge" style="display:none"></span>
     <span id="health" class="pill">checking</span>
   </div>
@@ -234,8 +231,6 @@ const P = () => (window.PricingData || null);
 const money = (n, d) => (window.PricingData ? window.PricingData.fmtMoney(n, d) : "$" + fmt(n));
 const MONTH_NAMES_FMT = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
 
-let DEMO = false;
-
 function clientOverview(a){
   return {
     generated_on:new Date().toISOString(),
@@ -250,7 +245,7 @@ function clientOverview(a){
 }
 
 /* Routes requests to the active dataset (uploaded) when available, otherwise
- * falls back to the live API or the static demo simulation. */
+ * falls back to the live API. */
 async function dataApi(path, body){
   const pd = window.PricingData;
   if (pd && pd.active()){
@@ -273,11 +268,6 @@ async function dataApi(path, body){
 }
 
 async function api(path, body) {
-  if (window.location.protocol === "file:") {
-    DEMO = true;
-    path = path.replace(/^\.\//, "/");
-    return demoApi(path, body);
-  }
   const ctrl = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), 4000);
   try {
@@ -287,10 +277,9 @@ async function api(path, body) {
     clearTimeout(timer);
     if (!r.ok) { const e = await r.json().catch(() => ({})); throw new Error(e.detail || r.statusText); }
     return r.json();
-  } catch {
+  } catch (err) {
     clearTimeout(timer);
-    DEMO = true;
-    return demoApi(path, body);
+    throw err;
   }
 }
 
@@ -321,197 +310,7 @@ function bar(label, pct, pctText) {
   return mb;
 }
 
-// ============ STATIC DEMO MODE (works on GitHub Pages, no backend) ==========
-const DEMO_PRODUCTS = [
-  ["P001",146.90,63.24,"Electronics"],["P002",38.50,18.95,"Apparel"],
-  ["P003",12.99,5.60,"Beauty"],["P004",74.00,36.10,"Home & Kitchen"],
-  ["P005",29.90,13.25,"Sports"],["P006",55.20,27.80,"Apparel"],
-  ["P007",92.40,44.90,"Electronics"],["P008",18.75,8.15,"Beauty"],
-  ["P009",41.30,19.60,"Sports"],["P010",120.00,58.00,"Home & Kitchen"],
-  ["P011",66.60,31.20,"Electronics"],["P012",24.40,10.90,"Beauty"],
-];
-const DEMO_CUSTOMERS = [
-  ["c-001",88,34,8.9,"Premium","Gold"],["c-002",61,22,5.2,"Loyal","Silver"],
-  ["c-003",45,14,3.1,"Regular","Bronze"],["c-004",95,41,9.4,"Premium","Gold"],
-  ["c-005",12,3,1.2,"Bargain seeker","New"],["c-006",72,26,6.1,"Loyal","Silver"],
-  ["c-007",33,9,2.4,"Bargain seeker","Bronze"],["c-008",57,18,4.7,"Regular","Silver"],
-  ["c-009",81,30,7.7,"Premium","Gold"],["c-010",25,7,1.8,"Bargain seeker","Bronze"],
-  ["c-011",67,24,5.8,"Loyal","Silver"],["c-012",49,15,3.6,"Regular","Bronze"],
-  ["c-013",90,37,8.6,"Premium","Gold"],["c-014",16,4,1.4,"Bargain seeker","New"],
-  ["c-015",54,17,4.2,"Regular","Bronze"],["c-016",78,28,6.9,"Loyal","Silver"],
-  ["c-017",39,11,2.9,"Bargain seeker","Bronze"],["c-018",63,21,5.5,"Loyal","Silver"],
-  ["c-019",27,8,2.1,"Bargain seeker","New"],["c-020",84,32,7.9,"Premium","Gold"],
-];
-function demoProduct(pid){
-  const r = DEMO_PRODUCTS.find(p => p[0] === pid) || DEMO_PRODUCTS[0];
-  return { product_id:r[0], base_price:r[1], cost:r[2], category:r[3] };
-}
-function demoCustomer(cid){
-  return DEMO_CUSTOMERS.find(c => c[0] === cid) || ["c-999",40,10,3.0,"Regular","Bronze"];
-}
 function clamp(x,lo,hi){ return Math.max(lo, Math.min(hi, x)); }
-function mulberry(seed){
-  return () => { seed|=0; seed = seed + 0x6D2B79F5|0;
-    let t = Math.imul(seed ^ seed>>>15, 1|seed);
-    t = t + Math.imul(t ^ t>>>7, 61|t) ^ t;
-    return ((t ^ t>>>14)>>>0)/4294967296; };
-}
-function demoRec(prod, pressure){
-  return Math.round(prod.base_price * (0.86 - 0.06 * pressure) * 100) / 100;
-}
-async function demoApi(path, body){
-  const p = path.replace(/^\/api\//,"");
-  if (p === "health") return { status:"ok", models_ready:false };
-  if (p === "products") return DEMO_PRODUCTS.map(x=>x[0]);
-  if (p === "customers") return DEMO_CUSTOMERS.map(x=>x[0]);
-  if (p === "products/detail") return DEMO_PRODUCTS.map(x => ({
-    product_id:x[0], base_price:x[1], cost:x[2], category:x[3] }));
-  if (p === "customers/detail") return DEMO_CUSTOMERS.map(x => ({
-    customer_id:x[0], loyalty_score:x[1], purchase_count:x[2], avg_sales:x[3],
-    segment_label:x[4], loyalty_tier:x[5], region:["North","West","South","East"][(+x[0].slice(2))%4],
-    preferred_category: DEMO_PRODUCTS[(+x[0].slice(2))%DEMO_PRODUCTS.length][3] }));
-  if (p === "insights"){
-    const inv = DEMO_PRODUCTS.map((x,i) => {
-      const avg = 22 + ((i*3)%24);
-      const s = 40 + ((i*53)%230);
-      return { product_id:x[0], inventory:s, avg_daily:avg,
-        days_left: Math.round(s/avg*10)/10,
-        revenue: x[1]*avg*30, profit: (x[1]-x[2])*avg*30 };
-    });
-    const byRev = inv.slice().sort((a,b)=>b.revenue-a.revenue);
-    const byProf = inv.slice().sort((a,b)=>b.profit-a.profit);
-    const cats = {};
-    inv.forEach(x=>{ const c=DEMO_PRODUCTS.find(q=>q[0]===x.product_id)[3];
-      cats[c]=(cats[c]||0)+x.revenue; });
-    const bestCat = Object.entries(cats).sort((a,b)=>b[1]-a[1])[0];
-    return {
-      product_count: DEMO_PRODUCTS.length,
-      top_revenue: byRev.slice(0,5).map(x=>({product_id:x.product_id,revenue:Math.round(x.revenue),profit:Math.round(x.profit)})),
-      top_profit: byProf.slice(0,5).map(x=>({product_id:x.product_id,revenue:Math.round(x.revenue),profit:Math.round(x.profit)})),
-      best_revenue_category:{name:bestCat[0], revenue:Math.round(bestCat[1])},
-      best_profit_category:{name:bestCat[0], profit:Math.round(bestCat[1]*0.5)},
-      monthly_sales:{1:1400,2:1520,3:1680,4:1750,5:1620,6:1410,7:1290,8:1350,9:1590,10:2100,11:2380,12:1960},
-      best_month:11, weekday_units:31.4, weekend_units:40.7,
-      monthly_sales_inv: inv.filter(x=>x.days_left<7),
-      low_stock: inv.filter(x=>x.days_left<7).slice(0,5).map(x=>({product_id:x.product_id,inventory:x.inventory,avg_daily:x.avg_daily,days_left:x.days_left})),
-      overstock: inv.filter(x=>x.days_left>60).slice(0,5).map(x=>({product_id:x.product_id,inventory:x.inventory,avg_daily:x.avg_daily,days_left:x.days_left})),
-      inventory: inv.sort((a,b)=>a.days_left-b.days_left).slice(0,8).map(x=>({product_id:x.product_id,inventory:x.inventory,avg_daily:x.avg_daily,days_left:x.days_left})),
-      trend_products: {P001:214,P006:120,P010:98,P004:-60,P008:-112,P002:-204},
-      segments:{ Regular:646, Loyal:645, "Bargain seeker":402, Premium:307 },
-    };
-  }
-  if (p === "manual"){
-    const b = body;
-    const comp = b.competitor || b.price;
-    const press = b.demand_pressure != null ? b.demand_pressure : 0.5;
-    const inv = b.inventory != null ? b.inventory : 50;
-    const eff = b.price * (1 - (b.discount_pct||0)/100);
-    const rawD = 18 + 24*press + (comp-eff)*0.05;
-    const demand = Math.max(0, Math.min(+rawD.toFixed(1), inv));
-    const revenue = Math.round(eff*demand*100)/100;
-    const profit = Math.round((eff-b.cost)*demand*100)/100;
-    const rec = Math.round(eff*(0.88-0.05*press)*100)/100;
-    const optDemand = Math.max(0, Math.min(18+24*press, inv));
-    const grid = [0,5,10,15,20];
-    const reasons = [
-      { icon:"→", tone:"flat", text:"Demand pressure is moderate (" + Math.round((b.demand_pressure != null ? b.demand_pressure : 0.5) * 100) + "%)." },
-      { icon:"↑", tone:"up", text:"Low inventory (" + inv + " units) supports a higher price to protect margin." },
-      { icon:"→", tone:"flat", text:"Competitor price at " + money(comp) + " — the recommendation stays aligned with the market." },
-      { icon:"↗", tone:"up", text:"Peak season month (" + MONTH_NAMES_FMT[b.month ? b.month - 1 : new Date().getMonth()] + ") justifies a higher price." },
-    ];
-    return {
-      input: b,
-      current:{ price:+eff.toFixed(2), demand, revenue, profit,
-        margin_pct: eff>0?Math.round((eff-b.cost)/eff*1000)/10:0 },
-      optimal:{ recommended_price:rec,
-        demand:Math.round(optDemand*10)/10,
-        revenue:Math.round(rec*optDemand*100)/100,
-        profit:Math.round((rec-b.cost)*optDemand*100)/100,
-        price_delta_pct: +(((rec-eff)/eff)*100).toFixed(1) },
-      discount_grid: grid.map(d => ({
-        discount:d, price:Math.round(b.price*(1-d/100)*100)/100,
-        demand:Math.max(0, Math.min(Math.round((18+24*press+(comp-b.price*(1-d/100))*0.05)*10)/10, inv))})),
-      feature_impacts: [
-        { feature:"price", label:"raising price 10%", impact_pct:-6.4 },
-        { feature:"competitor_price", label:"competitor +10%", impact_pct:+5.1 },
-        { feature:"inventory", label:"stock +50%", impact_pct:+1.2 },
-        { feature:"weekend", label:"weekday → weekend", impact_pct:+7.8 },
-      ],
-      reasons: reasons,
-      model: { name:"Linear Regression (ridge)", backbone:"client-linreg", r2:0.668, mae:5.29, rmse:6.99 },
-      confidence_pct: b.price > 0 && b.cost > 0 ? 72 : 35,
-      currency:"USD",
-    };
-  }
-  if (p.startsWith("sales/")){
-    const pid = p.slice(6);
-    const days = (body && body.days) || 30;
-    const rnd = mulberry((parseInt(pid.slice(1),10)||1)*7919);
-    const dates=[], units=[];
-    for (let i=days-1;i>=0;i--){
-      const d = new Date(Date.now()-i*86400000);
-      dates.push(d.toISOString());
-      units.push(Math.max(0, Math.round(28 + 10*Math.sin(i/6) + rnd()*14)));
-    }
-    return { product_id:pid, dates, units_sold:units };
-  }
-  if (p === "overview"){
-    return { generated_on:"demo", model_backbone:"xgboost",
-      model_metrics:{ models:{ linear:{r2:0.544,mae:6.3,rmse:8.2},
-        random_forest:{r2:0.64,mae:5.52,rmse:7.28},
-        xgboost:{r2:0.668,mae:5.29,rmse:6.99}}},
-      products:20, customers:2000, total_sales_rows:14460,
-      sales_last_30d:21591, avg_daily_units:34.8, avg_price:88.17,
-      segments:{ Regular:646, Loyal:645, "Bargain seeker":402, Premium:307 },
-      arima_series_fitted:20 };
-  }
-  if (p === "price"){
-    const prod = demoProduct(body.product_id);
-    const comp = body.competitor_price || prod.base_price;
-    const inv = body.inventory != null ? body.inventory : 50;
-    const press = body.demand_pressure != null ? body.demand_pressure : 0.5;
-    const rec = demoRec(prod, press);
-    const demand = Math.round((18 + 22*press + (comp-rec)*0.05)*10)/10;
-    return { product_id:prod.product_id, recommended_price:rec, cost:prod.cost,
-      expected_demand:demand, expected_revenue:Math.round(rec*demand*100)/100,
-      competitor_price:comp, inventory:inv, currency:"USD" };
-  }
-  if (p === "rl-price"){
-    const prod = demoProduct(body.product_id);
-    const press = body.demand_pressure != null ? body.demand_pressure : 0.5;
-    const rec = demoRec(prod, press);
-    const mults = [0.85,0.92,1.0,1.08,1.15];
-    const idx = clamp(Math.round(press*4),0,4);
-    return { method:"rl",
-      product_state:{ inventory:body.inventory||50, demand_pressure:press, competitor_gap:0.08 },
-      action_index:idx, action_multiplier:mults[idx],
-      price:Math.round(rec*mults[idx]*100)/100,
-      q_values:mults.map(m=>Math.round((10000+(m-1)*8000)*100)/100),
-      learning_steps:2000 };
-  }
-  if (p === "negotiate"){
-    const cust = demoCustomer(body.customer_id);
-    const prod = demoProduct(body.product_id);
-    const press = body.demand_pressure != null ? body.demand_pressure : 0.5;
-    const loyalty = cust[1];
-    const rec = demoRec(prod, press);
-    const discount = clamp(0.05 + 0.12*press + (100-loyalty)*0.003, 0.04, 0.35);
-    let final = Math.round(rec*(1-discount)*100)/100;
-    let agreed = true, note = null;
-    if (body.max_budget && final > body.max_budget){
-      const need = 1 - body.max_budget/rec;
-      if (need <= 0.4){ discount = need+0.01; final = Math.round(rec*(1-discount)*100)/100; note="countered to match customer budget"; }
-      else { agreed=false; note="customer budget below profitable floor"; }
-    }
-    return { agreed, rounds:1, final_price:final,
-      discount_pct:Math.round(discount*1000)/10,
-      customer_segment:cust[4], loyalty_tier:cust[5],
-      savings:Math.round((rec-final)*100)/100, budget:body.max_budget||null,
-      transcript:[{ round:1, customer_ask_discount:0.12,
-        agent_offer_discount:Math.round(discount*1000)/1000, accepted:agreed, note }] };
-  }
-  throw new Error("Unknown endpoint in demo mode: " + p);
-}
 
 function fill(sel, items){
   const el = $(sel); el.innerHTML = "";
@@ -612,9 +411,9 @@ window.PricingDashboard = {
       $("chart-product").onchange = loadChart;
       await loadChart();
     }catch(e){
-      $("health").textContent = "Backend unavailable — demo powered by local simulation";
+      $("health").textContent = "No dataset loaded";
       $("health").className = "pill dim";
-      $("metrics").innerHTML = `<div class="row"><span>Status</span><b>Demo / simulated</b></div>`;
+      $("metrics").innerHTML = `<div class="row"><span>Status</span><b>Upload a CSV / Excel dataset to run the dashboard</b></div>`;
     }
   },
 };
@@ -659,12 +458,8 @@ async function health(){
   }
   try{
     const h = await dataApi("/api/health");
-    if (DEMO){
-      pill.textContent = "Demo mode · simulated data"; pill.className = "pill dim";
-    }else{
-      pill.textContent = h.models_ready ? "Models ready · live API" : "Models not trained";
-      pill.className = "pill " + (h.models_ready ? "ok" : "bad");
-    }
+    pill.textContent = h.models_ready ? "Models ready · live API" : "Models not trained";
+    pill.className = "pill " + (h.models_ready ? "ok" : "bad");
   }catch(_){ pill.textContent = "Offline"; }
 }
 window.updateHealthPill = health;

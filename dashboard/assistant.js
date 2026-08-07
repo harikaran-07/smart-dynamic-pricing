@@ -339,7 +339,7 @@ const AICore = {
           const b = u.slice(half).reduce((x, y) => x + y, 0) / (u.length - half);
           trend = ((b - a) / a) * 100;
         }
-      } catch (_) { /* demo sales handler also works */ }
+      } catch (_) { /* fall back to the api() path */ }
       const month = this.highestMonth(D);
       const f = (days) => Math.round(daily * (days / 7) * (1 + trend / 100 / 4));
       return {
@@ -734,7 +734,10 @@ if (typeof document !== "undefined") {
           ` · ${D.overview && D.overview.model_backbone ? D.overview.model_backbone.toUpperCase() + " backbone" : "live data"}</p></div>`,
           ["Why is this price recommended?", "Which products need discounts?", "Inventory risk", "Best product to promote"]);
       } catch (e) {
-        addMsg("bot", "Could not load assistant data: " + esc(e && e.message ? e.message : String(e)));
+        var noData = typeof window !== "undefined" && window.PricingData && !window.PricingData.active();
+        addMsg("bot", noData
+          ? "No dataset loaded — use the Upload Dataset button to load a CSV or Excel file, then I can answer questions about pricing, demand and profit."
+          : "Could not load assistant data: " + esc(e && e.message ? e.message : String(e)));
       }
     })();
 

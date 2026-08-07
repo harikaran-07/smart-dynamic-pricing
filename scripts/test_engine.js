@@ -1,5 +1,5 @@
 /* Node harness for the new data pipeline (engine.js):
- *   - demo dataset generation
+ *   - empty state until a dataset is uploaded (no built-in demo data)
  *   - CSV parsing, column detection/mapping, validation
  *   - normalisation + cleaning (missing values)
  *   - analytics aggregation (monthly, seasonal, profit, inventory)
@@ -20,10 +20,21 @@ function approx(a, b, tol, msg) {
   assert(Math.abs(a - b) <= tol, msg + " (" + a + " ≈ " + b + ")");
 }
 
-// ---- demo dataset ---------------------------------------------------
-const demo = P.generateDemoDataset();
-assert(demo.length === 12 * 365, "demo dataset has 12 products × 365 days (" + demo.length + " rows)");
-assert(demo.every(r => r.product_id && r.date && r.units_sold > 0 && r.price > 0), "demo rows have required fields");
+// ---- empty state (no demo data) --------------------------------------
+assert(P.analytics() === null, "no analytics until a dataset is uploaded");
+assert(P.source() === "none" && !P.active(), "engine starts with source \"none\" and inactive");
+assert(P.assistantBundle() === null, "no assistant bundle without an uploaded dataset");
+const eRep = P.report();
+assert(eRep.size === 0 && eRep.preview.length === 0, "empty report has no rows or preview");
+assert(P.predictionTable().length === 0, "prediction table empty without data");
+assert(P.exportPredictions().csv.split("\n").length === 1, "export CSV has header only without data");
+assert(P.productById("P001") === null, "productById returns null without data");
+assert(P.salesSeries("P001").units_sold.length === 0, "sales series empty without data");
+assert(Array.isArray(P.explain().top_features), "explain falls back to default features without data");
+const eMan = P.manualPredict({ price: 49.99, cost: 22, inventory: 50 });
+assert(eMan.optimal.recommended_price > 0, "manual prediction works without an uploaded dataset");
+assert(P.insightText(null) === "", "insightText handles null analytics");
+assert(P.customerList().length === 50, "customer list uses a default size without data");
 
 // ---- CSV parsing ----------------------------------------------------
 const csv = 'product_id,date,price,cost,units_sold\n' +
@@ -108,6 +119,7 @@ assert(ds.avg > 0, "average demand reference computed");
 // ---- insight text + export --------------------------------------------
 const txt = P.insightText(a);
 assert(/sales records/.test(txt) && /products/.test(txt) && /recommended price/.test(txt), "AI summary covers records/products/recommendation");
+assert(/uploaded dataset/.test(txt), "insight text names the uploaded dataset");
 const exp = P.exportPredictions();
 assert(/product_id/.test(exp.csv) && exp.csv.split("\n").length === a.products + 1, "export CSV has header + one row per product");
 assert(/smart-pricing-predictions/.test(exp.name), "export filename names the predictions file");
@@ -150,13 +162,5 @@ const manR = P.manualPredict({ price: 49.99, cost: 22, inventory: 50, competitor
 assert(Array.isArray(manR.reasons) && manR.reasons.length >= 3, "manual prediction includes dynamic reasons");
 assert(manR.model && manR.model.name === "Linear Regression (ridge)", "manual prediction reports the model used");
 assert(manR.optimal.recommended_price > 0, "manual prediction optimal preserved");
-
-// ---- demo mode regression --------------------------------------------
-P.applyDemo();
-assert(!P.active() && P.source() === "demo", "reset returns to demo source");
-assert(P.assistantBundle() === null, "no assistant bundle in demo mode (existing api() path preserved)");
-const ad = P.analytics();
-assert(ad.records === demo.length, "demo analytics restored (" + ad.records + " rows)");
-assert(ad.holiday_impact_pct > 0 && ad.best_season === "Q4 (Oct-Dec)", "demo seasonality detected (holiday " + ad.holiday_impact_pct + "%)");
 
 process.exit(fails ? 1 : 0);

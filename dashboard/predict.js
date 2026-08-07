@@ -1,6 +1,6 @@
 /* predict.js — Prediction Center for the Smart Dynamic Pricing dashboard.
  *
- * Replaces the old "Demo Model" block with two clean modes:
+ * Provides two clean modes:
  *   Dataset Mode  : upload/use a dataset, analyse it, train the model, view a
  *                   clear prediction table and download it as CSV.
  *   Manual Mode   : enter price / demand / sales / inventory / competitor /
@@ -133,6 +133,12 @@
   function renderDataset() {
     var wrap = el('<div class="pp-grid"></div>');
     var a = P.analytics();
+    if (!a) {
+      var empty = el('<div class="pp-card wide"><h4>No dataset loaded</h4>' +
+        '<p class="sub">Upload a CSV or Excel file with the <b>Upload Dataset</b> button to train the model, run predictions and export results.</p></div>');
+      wrap.appendChild(empty);
+      return wrap;
+    }
     var report = P.report();
     var meta = P.meta();
     var currency = P.getCurrency();
@@ -140,7 +146,7 @@
     /* dataset analytics card */
     var chips =
       '<div class="pp-meta">' +
-      ppchip("Dataset", (meta && meta.fileName) || "Built-in sample", "") +
+      ppchip("Dataset", (meta && meta.fileName) || "—", "") +
       ppchip("Size", fmt(a.records) + " rows", "") +
       ppchip("Features", a.features, "") +
       ppchip("Products", a.products, "") +
@@ -383,7 +389,7 @@
     css();
 
     var a = P.analytics();
-    state.product = a.productList[0] ? a.productList[0].product_id : "P001";
+    state.product = a && a.productList[0] ? a.productList[0].product_id : "P001";
 
     var panel = el(
       '<div class="pp-panel">' +
