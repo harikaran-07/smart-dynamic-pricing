@@ -130,21 +130,21 @@
       '<div class="px-modal-box">' +
       '<button class="px-x" id="px-close" title="Close">&times;</button>' +
       '<h3>Upload Dataset</h3>' +
-      '<p class="sub">Load a CSV or Excel file. The dashboard validates columns, lets you map them, and retrains the model automatically.</p>' +
-      '<div class="px-drop" id="px-drop"><b>Choose a file</b> or drag &amp; drop here<br/><span style="font-size:12px">Accepted: .csv, .xlsx, .xls</span></div>' +
+      '<p class="sub">Upload a CSV file. It is sent to the backend ML pipeline, which validates it, profiles it, trains and compares models, and returns structured results.</p>' +
+      '<div class="px-drop" id="px-drop"><b>Choose a file</b> or drag &amp; drop here<br/><span style="font-size:12px">Accepted: .csv</span></div>' +
       '<div class="px-progress" id="px-progress"><div class="mb"><span id="px-progress-label">Reading file…</span><b id="px-progress-pct">0%</b></div><div class="bar"><i id="px-progress-fill" style="width:0%"></i></div></div>' +
       '<div class="px-error" id="px-error"></div>' +
       '<div class="px-preview" id="px-preview"><b style="font-size:13px">Preview</b> <span style="color:var(--faint);font-size:12px" id="px-preview-meta"></span><div style="overflow:auto;max-height:240px"><table><thead id="px-preview-head"></thead><tbody id="px-preview-body"></tbody></table></div>' +
       '<div class="px-mapgrid" id="px-mapgrid"><div class="px-mapgrid-title" style="grid-column:1/-1;font-size:13px;font-weight:700;margin-top:6px">Column mapping <span style="font-weight:400;color:var(--faint);font-size:12px">— required fields are highlighted</span></div></div></div>' +
       '<div class="px-modal-actions">' +
       '<button id="px-cancel" style="background:#0c1220;border:1px solid var(--line);color:var(--txt);box-shadow:none">Cancel</button>' +
-      '<button id="px-apply" disabled>Analyze &amp; Use Dataset</button>' +
+      '<button id="px-apply" disabled>Analyze &amp; Use Dataset</button>' + +
       '</div></div>';
     document.body.appendChild(m);
     m.querySelector("#px-close").onclick = closeModal;
     m.querySelector("#px-cancel").onclick = closeModal;
     var drop = m.querySelector("#px-drop");
-    drop.onclick = function () { var fi = document.createElement("input"); fi.type = "file"; fi.accept = ".csv,.xlsx,.xls"; fi.onchange = function () { if (fi.files[0]) handleFile(fi.files[0]); }; fi.click(); };
+    drop.onclick = function () { var fi = document.createElement("input"); fi.type = "file"; fi.accept = ".csv"; fi.onchange = function () { if (fi.files[0]) handleFile(fi.files[0]); }; fi.click(); };
     drop.ondragover = function (e) { e.preventDefault(); drop.classList.add("over"); };
     drop.ondragleave = function () { drop.classList.remove("over"); };
     drop.ondrop = function (e) { e.preventDefault(); drop.classList.remove("over"); if (e.dataTransfer.files[0]) handleFile(e.dataTransfer.files[0]); };
@@ -279,21 +279,20 @@
     var btn = document.getElementById("px-apply");
     btn.disabled = true;
     spinner(true);
+    setStackLabel("Sending dataset to backend\u2026");
     setTimeout(function () {
       try {
+        /* client mirror: normalise rows as before so the interactive panels
+         * (Analytics, Prediction Center, Decision Engine) work on the same data */
         var cleaned = P.normalizeRows(state.rows, state.mapping);
         if (!cleaned.rows.length) throw new Error(cleaned.warnings.join(" ") || "No valid rows could be normalised.");
         var cleaned2 = P.cleanRows(cleaned.rows);
         P.applyUpload(cleaned2.rows, { fileName: state.fileName, headers: state.headers, rowsParsed: state.rows.length, missingValues: cleaned2.missingValues, totalMissing: cleaned2.totalMissing });
-        state.applied = true;
-        var a = P.analytics();
-        a.missing_total = cleaned2.totalMissing;
-        a.categories = Object.keys(a.cat_revenue).length;
-        closeModal();
-        spinner(false);
-        setDataSourceUI("upload", state.fileName);
-        refreshEverything(a);
-        toast("Dataset loaded", state.fileName + " — " + a.records.toLocaleString("en-IN") + " valid records across " + a.products + " products.", "ok");
+
+        /* rebuild the CSV from the parsed rows; the backend re-validates and
+         * detects the relevant columns itself */
+        var csvText = P.toCSV(state.headers, state.rows.map(function (r) { return state.headers.map(function (h) { return r[h]; }); }));
+        uploadToBackend(csvText);
       } catch (e) {
         spinner(false);
         btn.disabled = false;
@@ -302,12 +301,67 @@
     }, 30);
   }
 
+  /* POST the dataset, train the models, and surface the structured results. */
+  function uploadToBackend(csvText) {
+    var fd = new FormData();
+    fd.append("file", new Blob(["\uFEFF" + csvText], { type: "text/csv" }), state.fileName.replace(/\.(xlsx|xls)$/i, ".csv"));
+    fetch("/api/dataset/upload", { method: "POST", body: fd })
+      .then(function (r) { return r.json().then(function (j) { if (!r.ok) throw new Error(j.detail || r.statusText); return j; }); })
+      .then(function (profile) {
+        setStackLabel("Backend profiling complete \u2014 training models\u2026");
+        var target = profile.suggested_target || ((profile.target_candidates && profile.target_candidates[0]) ? profile.target_candidates[0].column : null);
+        return fetch("/api/pipeline/train", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ dataset_id: profile.dataset_id, target: target }),
+        }).then(function (r) { return r.json().then(function (j) { if (!r.ok) throw new Error(j.detail || r.statusText); return { profile: profile, train: j }; }); });
+      })
+      .then(function (res) {
+        root.PricingBackend = {
+          profile: res.profile, train: res.train,
+          datasetId: res.profile.dataset_id, fileName: state.fileName, offline: false,
+        };
+        state.applied = true;
+        finishBackendFlow("ok");
+        toast("Backend ML ready",
+          state.fileName + " \u2014 best model: " + res.train.best.name + " (R\u00B2 " + res.train.best.r2 + ", RMSE " + res.train.best.rmse + " units).", "ok");
+      })
+      .catch(function (e) {
+        root.PricingBackend = { profile: null, train: null, datasetId: null, fileName: state.fileName, offline: true };
+        finishBackendFlow("offline");
+        toast("Backend offline",
+          "Uploaded dataset mirrored in-browser, but the ML pipeline could not be reached. " +
+          (e && e.message ? e.message : "Is the backend running?"), "warn");
+      });
+  }
+
+  function finishBackendFlow(how) {
+    spinner(false);
+    state.applied = true;
+    setStackLabel("");
+    closeModal();
+    setDataSourceUI("upload", state.fileName);
+    var demoBtn = document.getElementById("mode-demo");
+    var upBtn = document.getElementById("mode-upload");
+    if (demoBtn) demoBtn.classList.remove("active");
+    if (upBtn) upBtn.classList.add("active");
+    refreshEverything(P.analytics());
+    if (how === "ok") document.getElementById("health").textContent = "Uploaded dataset · backend ML";
+    else if (how === "offline") document.getElementById("health").textContent = "Backend offline · client mirror";
+  }
+
+  function setStackLabel(label) {
+    var s = document.getElementById("ml-stack-label");
+    if (s) s.textContent = label || "";
+  }
+
   /* ---------- cross-module refresh ---------- */
   function refreshEverything(a) {
     if (root.PricingAnalytics) { root.PricingAnalytics.render(); }
     if (root.PricingPredict) { root.PricingPredict.render(); }
     if (root.PricingAssistant && root.PricingAssistant.reload) { root.PricingAssistant.reload(); }
     if (root.PricingDashboard && root.PricingDashboard.refreshAll) { root.PricingDashboard.refreshAll(); }
+    if (root.PricingML) { root.PricingML.render(); root.PricingML.renderPrice(); }
     if (root.syncDatasetSections) root.syncDatasetSections();
     if (root.updateHealthPill) root.updateHealthPill();
   }

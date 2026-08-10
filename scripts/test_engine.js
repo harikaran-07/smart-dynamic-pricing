@@ -20,21 +20,31 @@ function approx(a, b, tol, msg) {
   assert(Math.abs(a - b) <= tol, msg + " (" + a + " ≈ " + b + ")");
 }
 
-// ---- empty state (no demo data) --------------------------------------
-assert(P.analytics() === null, "no analytics until a dataset is uploaded");
-assert(P.source() === "none" && !P.active(), "engine starts with source \"none\" and inactive");
+// ---- demo mode (default: full in-browser experience) -----------------
+assert(P.source() === "demo" && P.active(), "engine starts in Demo Mode and is active");
 assert(P.assistantBundle() === null, "no assistant bundle without an uploaded dataset");
 const eRep = P.report();
-assert(eRep.size === 0 && eRep.preview.length === 0, "empty report has no rows or preview");
-assert(P.predictionTable().length === 0, "prediction table empty without data");
-assert(P.exportPredictions().csv.split("\n").length === 1, "export CSV has header only without data");
-assert(P.productById("P001") === null, "productById returns null without data");
-assert(P.salesSeries("P001").units_sold.length === 0, "sales series empty without data");
-assert(Array.isArray(P.explain().top_features), "explain falls back to default features without data");
+assert(eRep.size > 0 && eRep.preview.length > 0, "demo report has rows and preview");
+assert(P.predictionTable().length > 0, "prediction table covers demo catalogue");
+assert(P.exportPredictions().csv.split("\n").length > 1, "export CSV has header + product rows");
+assert(P.productById("P001") !== null, "productById returns a demo product");
+assert(P.salesSeries("P001").units_sold.length > 0, "demo sales series has daily units");
+assert(Array.isArray(P.explain().top_features), "explain falls back to default features");
 const eMan = P.manualPredict({ price: 49.99, cost: 22, inventory: 50 });
-assert(eMan.optimal.recommended_price > 0, "manual prediction works without an uploaded dataset");
+assert(eMan.optimal.recommended_price > 0, "manual prediction works in demo mode");
 assert(P.insightText(null) === "", "insightText handles null analytics");
-assert(P.customerList().length === 50, "customer list uses a default size without data");
+const demoCusts = P.customerList();
+assert(demoCusts.length >= 20, "customer list generated from demo segments");
+
+// ---- demo mode extras (ML comparison + objectives) -------------------
+const base = P.trainBaseline(P.rows());
+assert(base.r2 !== null && base.mae >= 0 && base.rmse >= 0, "baseline model reports R²/MAE/RMSE");
+const linModel = P.analytics().model;
+assert(linModel.r2 !== null, "linear model reports R²");
+const profRec = P.optimizePrice(P.productById("P001"), { objective: "profit" });
+assert(profRec.objective === "profit" && !isNaN(profRec.expected_profit), "profit objective honoured by optimizePrice");
+P.applyDemo();
+assert(P.source() === "demo" && P.analytics() !== null, "applyDemo re-arms the demo dataset");
 
 // ---- CSV parsing ----------------------------------------------------
 const csv = 'product_id,date,price,cost,units_sold\n' +
@@ -124,11 +134,15 @@ const exp = P.exportPredictions();
 assert(/product_id/.test(exp.csv) && exp.csv.split("\n").length === a.products + 1, "export CSV has header + one row per product");
 assert(/smart-pricing-predictions/.test(exp.name), "export filename names the predictions file");
 
-// ---- currency support ------------------------------------------------
+// ---- currency support (USD / INR / EUR / GBP) ------------------------
 const curInr = P.setCurrency("INR", 83);
 assert(curInr.code === "INR" && curInr.symbol === "₹" && curInr.rate === 83, "setCurrency switches to INR with custom rate");
 assert(P.fmtMoney(125000, 0) === "₹1,03,75,000", "INR lakh grouping (125000 USD × 83 → ₹1,03,75,000)");
 assert(P.fmtMoney(49.99, 2) === "₹4,149.17", "INR conversion of 49.99 USD (" + P.fmtMoney(49.99, 2) + ")");
+const curEur = P.setCurrency("EUR", 0.92);
+assert(curEur.code === "EUR" && curEur.symbol === "€" && P.fmtMoney(49.99, 2) === "€45.99", "EUR symbol + custom rate applied");
+const curGbp = P.setCurrency("GBP", 0.79);
+assert(curGbp.code === "GBP" && curGbp.symbol === "£" && P.fmtMoney(49.99, 2) === "£39.49", "GBP symbol + custom rate applied");
 const curUsd = P.setCurrency("USD");
 assert(curUsd.code === "USD" && curUsd.rate === 1, "setCurrency back to USD resets rate");
 assert(P.fmtMoney(49.99, 2) === "$49.99", "USD formatting with $");

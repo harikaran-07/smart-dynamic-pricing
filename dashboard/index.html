@@ -112,6 +112,61 @@
   .err-box{margin-top:12px;padding:12px 14px;border-radius:10px;background:rgba(248,113,113,.1);
     border:1px solid rgba(248,113,113,.3);color:var(--bad);font-size:13px}
   @media (max-width:520px){.brand p{display:none}.wrap{padding:16px 12px 32px}}
+  .mode-switch{display:inline-flex;gap:2px;padding:3px;border-radius:12px;border:1px solid var(--line);
+    background:#0c1220;flex:none}
+  .mode-btn{width:auto;margin:0;padding:8px 14px;font-size:12.5px;border-radius:9px;background:none;
+    color:var(--mut);box-shadow:none;border:0;font-weight:600}
+  .mode-btn:hover{color:var(--txt);filter:none;transform:none}
+  .mode-btn.active{background:linear-gradient(135deg,var(--acc),var(--acc-2));color:#fff}
+  .ml-steps{display:flex;gap:0;flex-wrap:wrap;margin:0 0 18px;border:1px solid var(--line);
+    border-radius:var(--rad);background:rgba(12,18,32,.55);padding:14px 16px}
+  .ml-step{display:flex;gap:10px;align-items:flex-start;padding:0 18px 0 0;position:relative;flex:1;min-width:150px}
+  .ml-step + .ml-step::before{content:"";position:absolute;left:-2px;top:10px;width:14px;height:2px;
+    background:var(--line)}
+  .ml-dot{width:20px;height:20px;border-radius:50%;flex:none;border:2px solid var(--line);
+    background:#0c1220;margin-top:1px;position:relative}
+  .ml-step.done .ml-dot{background:var(--ok);border-color:var(--ok)}
+  .ml-step.done .ml-dot::after{content:"✓";position:absolute;inset:0;display:grid;place-items:center;
+    font-size:11px;color:#04110b;font-weight:800}
+  .ml-step.active .ml-dot{background:var(--acc);border-color:var(--acc);box-shadow:0 0 0 4px rgba(91,140,255,.22)}
+  .ml-step.active .ml-dot::after{content:"";position:absolute;inset:5px;border-radius:50%;
+    background:#fff;animation:mlpulse 1.1s ease-in-out infinite}
+  @keyframes mlpulse{50%{opacity:.25}}
+  .ml-step-txt b{display:block;font-size:12.5px}
+  .ml-step-txt i{display:block;font-size:11px;color:var(--faint);font-style:normal;margin-top:2px;line-height:1.45}
+  .ml-body{margin-top:14px}
+  .ml-host{display:flex;flex-direction:column;gap:16px}
+  .ml-model-summary{background:#0c1220;border:1px solid var(--line);border-radius:12px;padding:6px 16px}
+  .ml-row{display:flex;gap:14px;align-items:baseline;padding:9px 0;border-bottom:1px solid rgba(34,48,80,.5);
+    flex-wrap:wrap}
+  .ml-row:last-child{border-bottom:0}
+  .ml-row span{width:130px;color:var(--mut);font-size:12.5px;flex:none}
+  .ml-row b{color:var(--txt);font-size:13.5px}
+  .ml-row i{color:var(--faint);font-size:11.5px;font-style:normal;margin-left:auto;text-align:right;max-width:340px}
+  .ml-grid2{display:grid;grid-template-columns:repeat(auto-fit,minmax(330px,1fr));gap:16px}
+  .ml-col h4,.ml-avp h4,.ml-tbl h4,.ml-price h4{margin:2px 0 10px;font-size:13px;color:var(--mut);
+    text-transform:uppercase;letter-spacing:.8px}
+  .ml-chartbox{background:#0c1220;border:1px solid var(--line);border-radius:12px;padding:10px;margin-top:10px}
+  .ml-chartbox canvas{height:190px}
+  .ml-table{width:100%;border-collapse:collapse;font-size:12px}
+  .ml-table th,.ml-table td{border:1px solid var(--line);padding:7px 9px;text-align:left}
+  .ml-table th{background:#0c1220;color:var(--acc);font-size:10.5px;text-transform:uppercase;
+    letter-spacing:.5px}
+  .ml-table td{color:var(--mut)}
+  .ml-table .ml-best td{background:rgba(52,211,153,.08);color:var(--txt)}
+  .ml-compare{margin-bottom:8px}
+  .ml-avp,.ml-tbl{background:#0c1220;border:1px solid var(--line);border-radius:12px;padding:16px;margin-top:12px}
+  .ml-avp .ml-chartbox{margin-top:6px}
+  .ml-reasons{margin-top:6px}
+  .ml-reason{display:flex;gap:10px;align-items:flex-start;padding:9px 14px;border-bottom:1px solid rgba(34,48,80,.5)}
+  .ml-reason:last-child{border-bottom:0}
+  .ml-reason span{color:var(--acc-2);font-size:14px;width:16px;flex:none}
+  .ml-reason p{margin:0;font-size:12.5px;color:var(--txt);line-height:1.5}
+  .ml-caveat{margin:10px 2px 0;font-size:11.5px;color:var(--faint);font-style:italic}
+  .ml-btn{width:auto;padding:11px 22px;margin-top:14px}
+  .ml-price .ml-col:first-child{background:#0c1220;border:1px solid var(--line);border-radius:12px;padding:16px}
+  .ml-empty{color:var(--faint);font-size:12.5px}
+  .ml-cost-note{font-size:11px;color:var(--faint);margin:4px 0 0}
 </style>
 </head>
 <body>
@@ -127,11 +182,16 @@
   <div class="head-controls">
     <select id="currency-sel" class="ds-select" title="Display currency">
       <option value="USD">USD ($)</option>
+      <option value="EUR">EUR (€)</option>
+      <option value="GBP">GBP (£)</option>
       <option value="INR">INR (₹)</option>
     </select>
     <input id="currency-rate" class="rate-input" type="number" step="0.01" min="0" value="83"
-      title="Exchange rate (1 USD = ? INR)" style="display:none"/>
-    <button id="data-source" class="ds-select" title="Upload a CSV or Excel dataset">Upload Dataset</button>
+      title="Exchange rate (1 USD = ?)" style="display:none"/>
+    <div class="mode-switch" id="mode-switch" title="Choose how the dashboard runs">
+      <button id="mode-demo" class="mode-btn active">Demo Mode</button>
+      <button id="mode-upload" class="mode-btn">Upload Dataset</button>
+    </div>
     <span id="ds-badge" class="ds-badge" style="display:none"></span>
     <span id="health" class="pill">checking</span>
   </div>
@@ -212,6 +272,17 @@
     </section>
   </div>
 
+  <h2 class="sec">ML Pipeline</h2>
+  <div id="ml-steps" class="ml-steps"></div>
+  <section class="grid" style="grid-template-columns:none">
+    <div id="ml-root" class="card" style="grid-column:1/-1"><h3>Model Analysis</h3>
+      <p class="sub">Honest ML results — every metric is computed on rows the model has never seen.</p>
+      <div class="ml-body"></div></div>
+    <div id="ml-price-root" class="card" style="grid-column:1/-1"><h3>Price Recommendation</h3>
+      <p class="sub">Recommended price with a plain-language "why this price" explanation</p>
+      <div class="ml-body"></div></div>
+  </section>
+
   <h2 class="sec">Advanced Analytics</h2>
   <div id="px-root"></div>
 
@@ -255,6 +326,20 @@ async function dataApi(path, body){
     if (p === "customers") return pd.customerList().map(x=>x.customer_id).slice(0,20);
     if (p === "price"){
       const prod = a.productList.find(x=>x.product_id===body.product_id)||a.productList[0];
+      const bk = window.PricingBackend;
+      if (bk && bk.datasetId){
+        const rows = pd.rows();
+        const row = rows.filter(r=>r.product_id===body.product_id).pop() || rows[0];
+        const res = await api("/api/pricing/recommend", {
+          dataset_id: bk.datasetId, objective: body.objective || "revenue", row: row });
+        if (res && res.supports_optimization){
+          return {
+            recommended_price: res.optimal.price, expected_demand: res.optimal.estimated_demand,
+            expected_revenue: res.optimal.estimated_revenue, competitor_price: row.competitor_price,
+            inventory: row.inventory, cost: row.cost, backend: true, caveat: res.caveat,
+          };
+        }
+      }
       return pd.optimizePrice(prod, body);
     }
     if (p === "rl-price") return pd.rlPrice(body);
@@ -413,7 +498,7 @@ window.PricingDashboard = {
     }catch(e){
       $("health").textContent = "No dataset loaded";
       $("health").className = "pill dim";
-      $("metrics").innerHTML = `<div class="row"><span>Status</span><b>Upload a CSV / Excel dataset to run the dashboard</b></div>`;
+      $("metrics").innerHTML = `<div class="row"><span>Status</span><b>Switch to Demo Mode or upload a CSV dataset to run the dashboard</b></div>`;
     }
   },
 };
@@ -431,30 +516,76 @@ function syncDatasetSections(){
   if (el) el.style.display = hide ? "none" : "";
 }
 
+/* Applies the selected mode. Demo Mode runs fully in-browser; Upload Mode
+ * sends the dataset to the backend ML pipeline. */
+function setMode(mode){
+  if (!window.PricingData) return;
+  var demoBtn = document.getElementById("mode-demo");
+  var upBtn = document.getElementById("mode-upload");
+  if (mode === "demo"){
+    window.PricingData.applyDemo();
+    window.PricingBackend = null;
+    if (window.PricingUI && window.PricingUI.setDataSourceUI) window.PricingUI.setDataSourceUI("demo", "");
+    demoBtn.classList.add("active"); upBtn.classList.remove("active");
+    if (window.PricingUI) window.PricingUI.toast("Demo Mode active",
+      "All numbers come from the in-browser model on the generated demo dataset.", "ok");
+  } else {
+    if (window.PricingUI) window.PricingUI.openModal();
+    return;
+  }
+  refreshEverything2();
+}
+window.setMode = setMode;
+
+function refreshEverything2(){
+  if (window.PricingML) window.PricingML.render();
+  if (window.PricingML) window.PricingML.renderPrice();
+  if (window.PricingDashboard) window.PricingDashboard.refreshAll();
+  if (window.PricingAnalytics) window.PricingAnalytics.render();
+  if (window.PricingPredict) window.PricingPredict.render();
+  if (window.PricingAssistant && window.PricingAssistant.reload) window.PricingAssistant.reload();
+  if (window.syncDatasetSections) window.syncDatasetSections();
+  if (window.updateHealthPill) window.updateHealthPill();
+}
+
 /* Apply the selected currency and re-render every panel that shows money. */
 function applyCurrency(){
   var sel = document.getElementById("currency-sel");
   var rate = document.getElementById("currency-rate");
   if (!sel || !window.PricingData) return;
   var code = sel.value;
-  var r = code === "INR" && rate ? (+rate.value || 83) : 1;
+  var r = code === "INR" || code === "EUR" || code === "GBP" ? (+rate.value || 1) : 1;
   window.PricingData.setCurrency(code, r);
-  if (rate) rate.style.display = code === "INR" ? "" : "none";
+  if (rate){
+    rate.style.display = code === "USD" ? "none" : "";
+    rate.placeholder = "1 USD = ? " + code;
+  }
+  if (window.PricingML) window.PricingML.render();
+  if (window.PricingML) window.PricingML.renderPrice();
   if (window.PricingAnalytics) window.PricingAnalytics.render();
   if (window.PricingPredict) window.PricingPredict.render();
   if (window.PricingDashboard) window.PricingDashboard.refreshAll();
   if (window.PricingAssistant && window.PricingAssistant.reload) window.PricingAssistant.reload();
-  if (window.PricingUI) window.PricingUI.toast("Currency updated", code === "INR" ? "Showing prices in ₹ (rate " + r + " ₹/US$)." : "Showing prices in US$ (US$1 = " + (1 / r) + " ₹).", "ok");
+  if (window.PricingUI) window.PricingUI.toast("Currency updated",
+    code === "USD" ? "Showing prices in US$." : "Showing prices in " + code + " (custom rate " + r + " per US$).", "ok");
 }
 window.applyCurrency = applyCurrency;
 window.syncDatasetSections = syncDatasetSections;
 
 async function health(){
   const pill = $("health");
-  if (window.PricingData && window.PricingData.active()){
-    pill.textContent = "Uploaded dataset · client model";
-    pill.className = "pill ok";
-    return;
+  const pd = window.PricingData;
+  if (pd){
+    if (pd.active() && pd.source() === "upload"){
+      pill.textContent = "Uploaded dataset · backend ML";
+      pill.className = "pill ok";
+      return;
+    }
+    if (pd.active()){
+      pill.textContent = "Demo Mode · in-browser";
+      pill.className = "pill ok";
+      return;
+    }
   }
   try{
     const h = await dataApi("/api/health");
@@ -479,6 +610,8 @@ $("btn-price").onclick = async () => {
     rc.row("Competitor price", money(r.competitor_price));
     rc.row("Inventory", fmt(r.inventory));
     rc.row("Cost", money(r.cost));
+    if (r.backend) $("price-out").insertAdjacentHTML("beforeend",
+      `<p style="margin:8px 14px;font-size:11.5px;color:var(--faint);font-style:italic">${r.caveat || "ML-based estimate from the backend demand model, not guaranteed."}</p>`);
   }catch(e){ showError($("price-out"), e); }
 };
 
@@ -523,11 +656,20 @@ health();
 <script src="analytics.js"></script>
 <script src="predict.js"></script>
 <script src="upload.js"></script>
+<script src="ml.js"></script>
 <script src="assistant.js"></script>
 <script>
 window.PricingAnalytics && window.PricingAnalytics.mount();
 window.PricingPredict && window.PricingPredict.mount();
 window.PricingUI && window.PricingUI.boot();
+
+/* mode switcher wiring */
+(function () {
+  var demoBtn = document.getElementById("mode-demo");
+  var upBtn = document.getElementById("mode-upload");
+  if (demoBtn) demoBtn.onclick = function () { setMode("demo"); };
+  if (upBtn) upBtn.onclick = function () { setMode("upload"); };
+})();
 
 /* currency selector wiring */
 (function () {
@@ -536,6 +678,8 @@ window.PricingUI && window.PricingUI.boot();
   if (sel) sel.onchange = function () { applyCurrency(); syncDatasetSections(); };
   if (rate) rate.onchange = function () { applyCurrency(); };
   applyCurrency();
+  window.PricingML && window.PricingML.render();
+  window.PricingML && window.PricingML.renderPrice();
 })();
 </script>
 </body>

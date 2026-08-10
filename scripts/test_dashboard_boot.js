@@ -82,6 +82,7 @@ function load(file) {
   load("analytics.js");
   load("predict.js");
   load("upload.js");
+  load("ml.js");
 
   assert(typeof win.PricingCharts === "object" && typeof win.PricingCharts.Chart === "function", "PricingCharts.Chart defined");
   assert(typeof win.PricingData === "object" && typeof win.PricingData.analytics === "function", "PricingData defined");
@@ -91,7 +92,14 @@ function load(file) {
   try { win.PricingAnalytics.mount(); } catch (e) { bootErr = e; }
   assert(!bootErr, "PricingAnalytics.mount() boots without throwing" + (bootErr ? " — " + bootErr.message : ""));
   assert(els["px-root"].children.length > 0, "analytics panel rendered into #px-root");
-  assert(win.PricingData.analytics() === null, "no analytics before a dataset is uploaded");
+  assert(win.PricingData.analytics() !== null, "analytics available immediately in Demo Mode");
+  assert(win.PricingData.source() === "demo", "engine defaults to Demo Mode");
+  assert(win.PricingML && typeof win.PricingML.render === "function", "PricingML module exposes render()");
+  win.PricingML.render();
+  assert(doc.getElementById("ml-steps").innerHTML.indexOf("ml-step") >= 0, "ML pipeline stepper rendered");
+  assert(doc.getElementById("ml-root").children.length > 0, "ML pipeline panels rendered for demo mode");
+  win.PricingML.renderPrice();
+  assert(doc.getElementById("ml-price-root").children.length > 0, "ML price panel rendered for demo mode");
   assert(els["px-content"].children.length > 0, "analytics panel shows an empty state without data");
 
   bootErr = null;
