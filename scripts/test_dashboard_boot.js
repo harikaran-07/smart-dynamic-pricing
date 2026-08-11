@@ -28,9 +28,9 @@ function makeCtx() {
 
 function makeEl(tag) {
   return {
-    tagName: tag || "div", children: [], style: {}, options: [], value: "", textContent: "",
+    tagName: tag || "div", children: [], style: {}, options: [], _value: "", textContent: "",
     disabled: false, className: "", checked: false, scrollTop: 0, scrollHeight: 0,
-    _innerHTML: "", _parent: null,
+    _innerHTML: "", _parent: null, _qs: {}, _onchange: null, _onclick: null,
     classList: { add() {}, remove() {}, toggle() {} },
     get innerHTML() { return this._innerHTML; },
     set innerHTML(v) { this._innerHTML = String(v); },
@@ -39,8 +39,12 @@ function makeEl(tag) {
     add(o) { this.options.push(o); },
     addEventListener() {},
     focus() {}, click() {},
-    querySelector() { return makeEl("div"); },
+    get value() { return this.options.length ? String(this.options[0].value) : this._value; },
+    set value(v) { this._value = String(v); },
+    querySelector(sel) { if (!this._qs[sel]) this._qs[sel] = makeEl("div"); return this._qs[sel]; },
     querySelectorAll() { return []; },
+    closest() { if (!this._closestHost) this._closestHost = makeEl("div"); return this._closestHost; },
+    insertAdjacentHTML(pos, html) { this._innerHTML += String(html); },
     getContext() { return makeCtx(); },
     get clientWidth() { return 320; },
     get clientHeight() { return 240; },
@@ -48,7 +52,6 @@ function makeEl(tag) {
     set onchange(f) { this._onchange = f; }, get onchange() { return this._onchange; },
     set onclick(f) { this._onclick = f; }, get onclick() { return this._onclick; },
     set onkeydown(f) { this._onkeydown = f; }, get onkeydown() { return this._onkeydown; },
-    closest() { return null; },
   };
 }
 
@@ -167,6 +170,104 @@ function load(file) {
   win.PricingAnalytics.render = function () { refreshed = true; };
   try { win.PricingUI.refreshEverything(); } catch (e) { console.error("refresh threw:", e); }
   assert(refreshed, "refreshEverything() calls PricingAnalytics.render");
+
+  // ---- ML upload-mode panels (backend-shaped state + stubbed fetch) ----
+  const fetchCalls = [];
+  const realFetch = globalThis.fetch;
+  globalThis.fetch = function (url) {
+    fetchCalls.push(String(url));
+    const u = String(url);
+    let body;
+    if (u.indexOf("/api/pricing/portfolio") >= 0) {
+      body = { items: [
+        { product: "A1", current_price: 20, recommended_price: 18, change_pct: -10, expected_demand: 6,
+          expected_revenue: 108, expected_profit: 36, elasticity: -1.2, reliability: "High" },
+        { product: "A2", current_price: 30, recommended_price: 33, change_pct: 10, expected_demand: 4,
+          expected_revenue: 132, expected_profit: 44, elasticity: -1.5, reliability: "Medium" } ] };
+    } else if (u.indexOf("/api/pricing/recommend") >= 0) {
+      body = {
+        supports_optimization: true, currency: "USD",
+        current: { price: 20, estimated_demand: 5 },
+        optimal: { price: 18, estimated_demand: 6, estimated_revenue: 108, estimated_profit: 36,
+          change_pct: -10, objective: "revenue" },
+        demand_model: { kind: "pooled", r2: 0.5, n_obs: 200, elasticity: -1.2 },
+        reliability: { level: "High", score: 7, max: 9, reasons: ["Solid history: 200 rows.", "Good demand fit."] },
+        rules: [{ rule: "max-single-step-increase", applied: true, detail: "Sweep capped at +20%." }],
+        reasons: [{ icon: "\u2192", text: "Lower price raises demand." }],
+        caveat: "ML-based estimate.",
+      };
+    } else {
+      body = {
+        rows: [
+          { product_id: "A1", price: 20, units_sold: 5, order_date: "2026-03-01" },
+          { product_id: "A1", price: 30, units_sold: 7, order_date: "2026-03-02" },
+          { product_id: "A2", price: 25, units_sold: 6, order_date: "2026-03-01" },
+        ],
+        pricing_columns: { price: "price", units: "units_sold", group: "product_id" },
+      };
+    }
+    return Promise.resolve({ ok: true, json: function () { return Promise.resolve(body); } });
+  };
+
+  const fakeProfile = {
+    rows: 200, total_missing: 3, duplicates: 1, suggested_target: "units_sold", dataset_id: "abc123",
+    quality: { score: 92, label: "Excellent", issues: ["2 missing values", "1 duplicate row"] },
+  };
+  const fakeTrain = {
+    best: { name: "Random Forest", r2: 0.61, mae: 3.2, rmse: 4.1 },
+    metrics_explained: { r2: "r2 explained", mae: "mae explained", rmse: "rmse explained" },
+    dataset: { rows: 200, features: 12, target: "units_sold" },
+    models: [
+      { name: "Linear Regression", r2: 0.5, mae: 3.4, rmse: 4.5, cv_r2_mean: 0.48, cv_r2_std: 0.02 },
+      { name: "Random Forest", r2: 0.61, mae: 3.2, rmse: 4.1, cv_r2_mean: 0.6, cv_r2_std: 0.03 },
+      { name: "Gradient Boosting", r2: 0.6, mae: 3.3, rmse: 4.2, cv_r2_mean: 0.59, cv_r2_std: 0.03 },
+      { name: "XGBoost", r2: 0.59, mae: 3.35, rmse: 4.25, cv_r2_mean: 0.58, cv_r2_std: 0.04 },
+    ],
+    feature_importance: [{ feature: "price", importance: 0.5 }],
+    test_predictions: [{ actual: 10, predicted: 9.2 }],
+    predictions_table: [{ product_id: "A1", actual: 5, predicted: 4.8 }],
+  };
+  win.PricingBackend = { profile: fakeProfile, train: fakeTrain, datasetId: "abc123", fileName: "t.csv", offline: false };
+
+  bootErr = null;
+  try { win.PricingML.render(); } catch (e) { bootErr = e; }
+  assert(!bootErr, "ML upload-mode panels render without throwing" + (bootErr ? " \u2014 " + bootErr.message : ""));
+  const upHost = doc.getElementById("ml-root").children[doc.getElementById("ml-root").children.length - 1];
+  assert(upHost.innerHTML.indexOf("Dataset quality") >= 0, "quality card rendered in upload mode");
+  assert(upHost.innerHTML.indexOf("Model comparison") >= 0, "model comparison table rendered in upload mode");
+  assert(upHost.innerHTML.indexOf("Portfolio") >= 0, "portfolio section present in upload mode");
+  await new Promise(r => setTimeout(r, 80));
+  assert(fetchCalls.some(u => u.indexOf("/api/pricing/portfolio") >= 0), "portfolio endpoint fetched");
+  assert(fetchCalls.some(u => u.indexOf("/api/dataset/sample") >= 0), "sample endpoint fetched");
+  const portWrap = upHost._qs["#ml-up-portfolio-wrap"];
+  const portHtml = portWrap.innerHTML;
+  assert(portHtml.indexOf("<table") >= 0 && portHtml.indexOf("Reliability") >= 0 && portHtml.indexOf("High") >= 0,
+    "portfolio table populated from backend data");
+  assert(win.__mlCharts && win.__mlCharts["ml-up-portfolio"], "portfolio chart (current vs recommended) drawn");
+  const dataWrap = upHost._qs["#ml-up-data-wrap"];
+  assert(dataWrap.innerHTML.indexOf("Demand vs price") >= 0, "demand-vs-price chart populated from sample data");
+  assert(dataWrap.innerHTML.indexOf("ml-up-trend-prod") >= 0, "trend product selector populated");
+
+  bootErr = null;
+  try { win.PricingML.renderPrice(); } catch (e) { bootErr = e; }
+  assert(!bootErr, "ML upload price panel renders without throwing" + (bootErr ? " \u2014 " + bootErr.message : ""));
+  const priceHost = doc.getElementById("ml-price-root").children[doc.getElementById("ml-price-root").children.length - 1];
+  const runBtn = priceHost._qs["#ml-up-price-run"];
+  bootErr = null;
+  try { runBtn._onclick(); } catch (e) { bootErr = e; }
+  await new Promise(r => setTimeout(r, 40));
+  assert(!bootErr, "upload price recommendation click does not throw" + (bootErr ? " \u2014 " + bootErr.message : ""));
+  const out = priceHost._qs["#ml-up-price-out"];
+  const outHtml = out.children.map(c => c.innerHTML).join(" ") + out.innerHTML;
+  assert(outHtml.indexOf("Estimated profit") >= 0 && outHtml.indexOf("Reliability") >= 0,
+    "price panel shows estimated profit + reliability badge");
+  assert(out.innerHTML.indexOf("Business rules applied") >= 0, "price panel lists applied business rules");
+
+  win.PricingBackend = { profile: null, train: null, datasetId: null, fileName: "t.csv", offline: true };
+  bootErr = null;
+  try { win.PricingML.render(); } catch (e) { bootErr = e; }
+  assert(!bootErr, "ML offline fallback renders without throwing" + (bootErr ? " \u2014 " + bootErr.message : ""));
+  globalThis.fetch = realFetch;
 
   process.exit(fails ? 1 : 0);
 })();

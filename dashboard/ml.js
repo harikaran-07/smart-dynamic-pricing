@@ -1,7 +1,7 @@
 /* ml.js — ML Pipeline module for the Smart Dynamic Pricing dashboard.
  *
  * Renders the honest ML story for both modes:
- *   Demo Mode   — client-side: Linear Regression vs Seasonal Baseline,
+ *   Demo Mode   — client-side: a single honest Linear Regression model,
  *                 feature strengths, actual-vs-predicted, client
  *                 recommendations (clearly labelled as demo estimates).
  *   Upload Mode — results of the backend pipeline: model comparison,
@@ -17,6 +17,7 @@
 
   function backend() { return root.PricingBackend || null; }
   var P = null;
+  var BACKEND = null;
 
   function esc(s) {
     return String(s == null ? "" : s).replace(/[&<>"']/g, function (c) {
@@ -524,6 +525,7 @@
   function render() {
     P = root.PricingData;
     if (!P) return;
+    BACKEND = backend();
     var bk = backend();
     var isUp = bk && bk.train;
     var offline = bk && bk.offline && !bk.train;
@@ -546,6 +548,7 @@
   function renderPrice() {
     P = root.PricingData;
     if (!P) return;
+    BACKEND = backend();
     var el = document.getElementById("ml-price-root");
     if (!el) return;
     if (backend() && backend().train) pricePanelUpload(el);
