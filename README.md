@@ -223,6 +223,13 @@ python -m uvicorn main:app --reload
 The dashboard and API are then served from the same origin (`http://127.0.0.1:8000`).
 Verify with `python scripts/test_backend.py` (all suites green: 0 failures).
 
+**Expected accuracy on the sample dataset** (regenerate with `python backend/make_sample_csv.py`):
+hold-out R² ≈ 0.46 (XGBoost, best) / 0.46 (Gradient Boosting) / 0.42 (Random Forest) /
+0.27 (Linear) with 5-fold CV agreeing (≈ 0.45); per-product log-log demand fits used
+by the price optimizer reach R² 0.1–0.4 with elasticities between −0.8 and −1.6.
+If a regeneration ever drops to R² ≈ 0, the dataset has lost its price→demand signal
+(the generator must keep ±15% promo-cycle price variation and healthy volumes).
+
 ### Deploying to Render
 
 1. Push the repo to GitHub.
