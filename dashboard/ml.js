@@ -400,7 +400,12 @@
   var EMPTY_ML =
     '<div class="ml-empty" style="padding:16px">Upload a CSV dataset to run the ML pipeline: ' +
     "the backend compares Linear Regression, Random Forest, Gradient Boosting and XGBoost " +
-    "(5-fold cross-validation + hold-out metrics) and drives rule-constrained price recommendations.</div>";
+    "(5-fold cross-validation + hold-out metrics) and drives rule-constrained price recommendations. " +
+    '<button type="button" class="ml-upload-btn" onclick="PricingUI&amp;&amp;PricingUI.openModal&amp;&amp;PricingUI.openModal()">&#8593; Upload Dataset</button></div>';
+
+  var EMPTY_PRICE =
+    '<div class="ml-empty" style="padding:16px">Upload a dataset to get rule-constrained price recommendations with reliability scores. ' +
+    '<button type="button" class="ml-upload-btn" onclick="PricingUI&amp;&amp;PricingUI.openModal&amp;&amp;PricingUI.openModal()">&#8593; Upload Dataset</button></div>';
 
   function render() {
     P = root.PricingData;
@@ -434,7 +439,7 @@
     var el = document.getElementById("ml-price-root");
     if (!el) return;
     if (!P.active()) {
-      el.innerHTML = '<div class="ml-empty" style="padding:16px">Upload a dataset to get rule-constrained price recommendations with reliability scores.</div>';
+      el.innerHTML = EMPTY_PRICE;
       return;
     }
     if (backend() && backend().train) pricePanelUpload(el);

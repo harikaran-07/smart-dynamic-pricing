@@ -568,9 +568,10 @@
     var d = document.createElement("div");
     d.className = "px-empty";
     d.innerHTML =
-      '<div class="px-empty-box">' +
+      '<div class="px-empty-box" style="text-align:center">' +
       '<h4>No dataset loaded</h4>' +
       '<p>Upload a CSV or Excel file with the <b>Upload Dataset</b> button to see analytics, forecasts and pricing insights here.</p>' +
+      '<button type="button" class="px-btn px-primary" style="margin:14px auto 0;display:block" onclick="PricingUI&amp;&amp;PricingUI.openModal&amp;&amp;PricingUI.openModal()">&#8593; Upload Dataset</button>' +
       '</div>';
     return d;
   }

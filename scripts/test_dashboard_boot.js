@@ -122,6 +122,14 @@ function load(file) {
   try { win.PricingUI.boot(); } catch (e) { bootErr = e; }
   assert(!bootErr, "PricingUI.boot() boots without throwing" + (bootErr ? " — " + bootErr.message : ""));
   assert(typeof els["data-source"].onclick === "function", "Upload Dataset button wired");
+  assert(typeof win.PricingUI.openModal === "function", "PricingUI.openModal exposes the upload flow");
+
+  // empty-state buttons hand off to the upload modal
+  win.PricingML.render();
+  const mlEmpty = doc.getElementById("ml-root").innerHTML;
+  assert(mlEmpty.indexOf("PricingUI.openModal") >= 0, "ML empty state has an Upload Dataset button");
+  win.PricingML.renderPrice();
+  assert(doc.getElementById("ml-price-root").innerHTML.indexOf("PricingUI.openModal") >= 0, "ML price empty state has an Upload Dataset button");
 
   // switch tabs through the analytics panel
   const tabs = [];
