@@ -164,6 +164,9 @@ def profile(df: pd.DataFrame, preferred_target: str | None = None) -> dict:
             f"Only {rows:,} rows — results will be noisy. More data improves reliability."
         )
 
+    quality = _quality_score(df, data_types, total_missing, duplicates,
+                             numeric_cols, categorical_cols, rows)
+
     return {
         "filename": None,  # filled by caller
         "rows": rows,
@@ -178,7 +181,98 @@ def profile(df: pd.DataFrame, preferred_target: str | None = None) -> dict:
         "datetime_columns": datetime_cols,
         "target_candidates": target_candidates,
         "suggested_target": suggested_target,
+        "quality": quality,
         "messages": messages,
+    }
+
+
+def _quality_score(df: pd.DataFrame, data_types: dict, total_missing: int,
+                   duplicates: int, numeric_cols: list[str],
+                   categorical_cols: list[str], rows: int) -> dict:
+    """Dataset-quality score (0-100) with the reasons behind it. Surfaces
+    incorrect or unusual values (negatives, price<cost, extremes) so the user
+    can judge data quality BEFORE training."""
+    issues = []
+    score = 100
+
+    miss_frac = total_missing / (rows * len(df.columns)) if rows and len(df.columns) else 0
+    if miss_frac > 0.2:
+        issues.append(f"{round(miss_frac*100)}% of all cells are missing — high missingness skews models.")
+        score -= 25
+    elif miss_frac > 0.05:
+        issues.append(f"{round(miss_frac*100)}% of cells are missing (auto-filled during preprocessing).")
+        score -= 8
+
+    dup_frac = duplicates / rows if rows else 0
+    if dup_frac > 0.1:
+        issues.append(f"{duplicates:,} duplicate rows ({round(dup_frac*100)}%) will be dropped.")
+        score -= 10
+    elif duplicates:
+        issues.append(f"{duplicates:,} duplicate rows removed before training.")
+        score -= 3
+
+    if rows < 50:
+        issues.append(f"Only {rows:,} rows — model results will be noisy.")
+        score -= 20
+    elif rows < 200:
+        issues.append(f"{rows:,} rows is workable but limited for reliable ML.")
+        score -= 8
+
+    if not numeric_cols:
+        issues.append("No numeric columns found — ML training is not possible.")
+        score -= 40
+
+    # unusual / incorrect values on the columns that matter for pricing
+    bad_cells = 0
+    for c in numeric_cols:
+        s = pd.to_numeric(df[c], errors="coerce").dropna()
+        if not len(s):
+            continue
+        if c.lower().replace("_", " ") in ("price", "selling price", "unit price", "prc",
+                                           "cost", "cogs", "unit cost", "product cost"):
+            neg = int((s < 0).sum())
+            if neg:
+                issues.append(f"Column '{c}' contains {neg:,} negative value(s) — impossible for price/cost.")
+                score -= 10
+                bad_cells += neg
+            if "price" in c.lower().replace("_", " ") and "competitor" not in c.lower().replace("_", " "):
+                zero = int((s <= 0).sum())
+                if zero:
+                    issues.append(f"Column '{c}' has {zero:,} zero/negative price(s) that will be excluded.")
+                    score -= 5
+                    bad_cells += zero
+        else:
+            q1, q3 = s.quantile(0.25), s.quantile(0.75)
+            iqr = q3 - q1
+            if iqr > 0:
+                outs = int(((s < q1 - 3 * iqr) | (s > q3 + 3 * iqr)).sum())
+                if outs:
+                    issues.append(f"Column '{c}': {outs:,} extreme outlier(s) (beyond 3×IQR).")
+                    score -= 4
+                    bad_cells += outs
+        if s.nunique() <= 1:
+            issues.append(f"Column '{c}' is constant — it adds no information to the model.")
+            score -= 3
+
+    # price-vs-cost consistency (when both exist)
+    p_col = next((c for c in numeric_cols if c.lower().replace("_", " ") == "price"), None)
+    cost_col = next((c for c in numeric_cols if "cost" in c.lower().replace("_", " ")), None)
+    if p_col and cost_col:
+        p = pd.to_numeric(df[p_col], errors="coerce")
+        c = pd.to_numeric(df[cost_col], errors="coerce")
+        under = int(((p > 0) & (c > 0) & (p < c)).sum())
+        if under:
+            issues.append(f"{under:,} row(s) have price below cost — margin impossible; these are flagged.")
+            score -= 8
+
+    score = max(0, min(100, score))
+    issues.sort()
+    return {
+        "score": score,
+        "label": "Excellent" if score >= 85 else ("Good" if score >= 70 else
+                  ("Fair" if score >= 50 else "Poor")),
+        "issues": issues,
+        "bad_cells": bad_cells,
     }
 
 

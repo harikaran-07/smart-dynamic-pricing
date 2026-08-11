@@ -83,40 +83,25 @@
   }
 
   /* ------------------------------------------------------------------ */
-  /* Demo-mode rendering                                                 */
+  /* Demo-mode rendering (single real in-browser model — the comparison  */
+  /* of Random Forest / Gradient Boosting / XGBoost runs on the backend  */
+  /* in Upload Mode, never on fake client models)                        */
   /* ------------------------------------------------------------------ */
-  function demoBestModel() {
+  function demoModel() {
     var a = P.analytics();
-    var lin = a.model;
-    var base = P.trainBaseline(P.rows());
-    var best = lin.r2 >= base.r2 ? lin : base;
-    var models = [
-      { name: lin.name, r2: lin.r2, mae: lin.mae, rmse: lin.rmse, time: lin.trainingTimeMs, best: best === lin },
-      { name: base.name, r2: base.r2, mae: base.mae, rmse: base.rmse, time: base.trainingTimeMs, best: best === base },
-    ];
-    return { best: best, models: models, lin: lin, base: base };
+    return a.model;
   }
 
-  function renderComparisonChart(models, hostId) {
-    var names = models.map(function (m) { return m.name; }).map(function (n, i) { return "M" + (i + 1); });
-    draw(hostId, {
-      xLabels: names,
-      series: [
-        { name: "R\u00B2", color: "#5b8cff", type: "bar", data: models.map(function (m) { return m.r2; }) },
-        { name: "RMSE (units)", color: "#8b5cf6", type: "bar", data: models.map(function (m) { return m.rmse; }) },
-      ],
-      yFmt: function (v) { return fmt(v, 3); },
-      title: "Model comparison",
-    });
-  }
-
-  function compareTable(models) {
-    var rows = models.map(function (m) {
-      return "<tr" + (m.best ? " class='ml-best'" : "") + "><td>" + esc(m.name) + (m.best ? " <span class='badge'>BEST</span>" : "") +
-        "</td><td>" + fmt(m.r2, 4) + "</td><td>" + fmt(m.mae, 2) + "</td><td>" + fmt(m.rmse, 2) +
-        "</td><td>" + fmt(m.time, 1) + " ms</td></tr>";
-    }).join("");
-    return '<table class="ml-table"><thead><tr><th>Model</th><th>R\u00B2</th><th>MAE</th><th>RMSE</th><th>Train time</th></tr></thead><tbody>' + rows + "</tbody></table>";
+  function demoModelCard(lin) {
+    return '<div class="ml-model-summary">' +
+      metricRow("Model", "<b>Linear Regression (ridge)</b>", "in-browser model on the demo dataset — Demo Mode") +
+      metricRow("R\u00B2", fmt(lin.r2, 4), "share of demand variance explained on unseen rows (0 = no better than the mean)") +
+      metricRow("MAE", fmt(lin.mae, 2) + " units", "average absolute error") +
+      metricRow("RMSE", fmt(lin.rmse, 2) + " units", "root mean squared error \u2014 penalises large errors more") +
+      metricRow("Trained on", fmt(lin.trainSize) + " rows \u00B7 tested on " + fmt(lin.testSize), "deterministic 80/20 split in-browser") +
+      "</div>" +
+      '<p class="ml-caveat">Demo Mode trains a single in-browser linear model. Upload a dataset to compare ' +
+      "Linear Regression, Random Forest, Gradient Boosting and XGBoost on the backend.</p>";
   }
 
   function featureStrengthChart() {
@@ -148,26 +133,18 @@
   }
 
   function demoPanel(rootEl) {
-    var ml = demoBestModel();
+    var lin = demoModel();
     var host = document.createElement("div");
     host.className = "ml-host";
     host.innerHTML =
-      '<div class="ml-model-summary">' +
-      metricRow("Best model", "<b>" + esc(ml.best.name) + "</b>", "lowest hold-out RMSE, evaluated on a deterministic 80/20 split") +
-      metricRow("R\u00B2", fmt(ml.best.r2, 4), "share of demand variance explained on unseen rows (0 = no better than the mean)") +
-      metricRow("MAE", fmt(ml.best.mae, 2) + " units", "average absolute error") +
-      metricRow("RMSE", fmt(ml.best.rmse, 2) + " units", "root mean squared error \u2014 penalises large errors more") +
-      metricRow("Trained on", fmt(ml.best.trainSize) + " rows \u00B7 tested on " + fmt(ml.best.testSize), "split computed in-browser, same split for both models") +
-      "</div>" +
+      demoModelCard(lin) +
       '<div class="ml-grid2">' +
-      '<div class="ml-col"><h4>Model comparison</h4><div class="ml-compare">' + compareTable(ml.models) + "</div>" +
-      "<div class='ml-chartbox'><canvas id='ml-demo-compare'></canvas></div></div>" +
       '<div class="ml-col"><h4>Feature strength</h4><div class="ml-chartbox"><canvas id="ml-demo-imp"></canvas></div></div>' +
-      "</div>" +
-      '<div class="ml-avp"><h4>Demand forecast (demo estimate)</h4>' +
+      '<div class="ml-col"><h4>Demand forecast (demo estimate)</h4>' +
       "<label style='margin:8px 0 4px'>Product</label>" +
       '<select id="ml-demo-prod"></select>' +
-      '<div class="ml-chartbox"><canvas id="ml-demo-avp"></canvas></div></div>';
+      '<div class="ml-chartbox"><canvas id="ml-demo-avp"></canvas></div></div>' +
+      "</div>";
     rootEl.innerHTML = "";
     rootEl.appendChild(host);
 
@@ -178,7 +155,6 @@
     var refreshAvp = function () { avpDemo(sel.value); };
     sel.onchange = refreshAvp;
 
-    renderComparisonChart(ml.models, "ml-demo-compare");
     featureStrengthChart();
     refreshAvp();
   }
@@ -226,6 +202,7 @@
     for (var i = 0; i < n; i++) labels.push("row " + (i + 1));
     draw("ml-up-avp", {
       xLabels: labels,
+      showValues: "maxmin",
       series: [
         { name: "Actual", color: "#5b8cff", data: tp.slice(0, n).map(function (r) { return r.actual; }) },
         { name: "Predicted", color: "#34d399", data: tp.slice(0, n).map(function (r) { return r.predicted; }) },
@@ -247,11 +224,28 @@
       "</tr></thead><tbody>" + body + "</tbody></table></div>";
   }
 
+  function qualityCard(profile) {
+    if (!profile || !profile.quality) return "";
+    var q = profile.quality;
+    var tone = q.score >= 85 ? "var(--ok)" : q.score >= 50 ? "var(--warn)" : "var(--bad)";
+    var html = '<div class="ml-quality">' +
+      '<div class="ml-q-score" style="--qc:' + tone + '"><b>' + q.score + '</b><span>/100</span></div>' +
+      '<div class="ml-q-body"><h4>Dataset quality: ' + esc(q.label) + "</h4>" +
+      "<p>" + fmt(profile.rows) + " rows \u00B7 " + fmt(profile.total_missing || 0) + " missing \u00B7 " +
+      fmt(profile.duplicates || 0) + " duplicates \u00B7 target: <b>" + esc(profile.suggested_target || "\u2014") + "</b></p>" +
+      (q.issues && q.issues.length
+        ? "<ul>" + q.issues.map(function (i) { return "<li>" + esc(i) + "</li>"; }).join("") + "</ul>"
+        : "<p class='ml-empty'>No data-quality issues detected.</p>") +
+      "</div></div>";
+    return html;
+  }
+
   function uploadPanel(rootEl) {
     var tr = BACKEND.train;
     var host = document.createElement("div");
     host.className = "ml-host";
     host.innerHTML =
+      qualityCard(BACKEND.profile) +
       '<div class="ml-model-summary">' +
       metricRow("Best model", "<b>" + esc(tr.best.name) + "</b>", "lowest hold-out RMSE, ties broken by R\u00B2") +
       metricRow("R\u00B2", fmt(tr.best.r2, 4), esc(String((tr.metrics_explained && tr.metrics_explained.r2) || "R\u00B2 = share of target variance explained (0 = no better than the mean)."))) +
@@ -266,12 +260,122 @@
       "</div>" +
       '<div class="ml-avp"><h4>Hold-out actual vs predicted</h4>' +
       '<div class="ml-chartbox"><canvas id="ml-up-avp"></canvas></div></div>' +
-      '<div class="ml-tbl"><h4>Per-row predictions (first ' + tr.predictions_table.length + " of test set, sampled)</h4>" + predictionsTable(tr) + "</div>";
+      '<div class="ml-tbl"><h4>Per-row predictions (first ' + tr.predictions_table.length + " of test set, sampled)</h4>" + predictionsTable(tr) + "</div>" +
+      '<div class="ml-tbl" id="ml-up-portfolio-wrap"><h4>Portfolio: top products needing price changes</h4>' +
+      '<div class="ml-empty">Loading recommendations\u2026</div></div>' +
+      '<div class="ml-grid2" id="ml-up-data-wrap"></div>';
     rootEl.innerHTML = "";
     rootEl.appendChild(host);
     uploadCompareChart(tr.models);
     featureImportanceChart(tr.feature_importance || []);
     uploadAvp(tr);
+    loadUploadExtras(host);
+  }
+
+  /* Charts that need raw rows: demand-vs-price curve, history trend and the
+   * portfolio (current vs recommended). All data comes from the backend. */
+  function loadUploadExtras(host) {
+    var bk = backend();
+    if (!bk) return;
+    var wrap = host.querySelector("#ml-up-data-wrap");
+    var portWrap = host.querySelector("#ml-up-portfolio-wrap");
+    fetch("/api/pricing/portfolio?dataset_id=" + encodeURIComponent(bk.datasetId), {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ dataset_id: bk.datasetId, objective: "revenue", top: 10 }),
+    }).then(function (r) { return r.json(); }).then(function (port) {
+      if (portWrap) {
+        if (!port.items || !port.items.length) {
+          portWrap.innerHTML = "<h4>Portfolio: top products needing price changes</h4>" +
+            '<p class="ml-empty">' + esc(port.note || "No products with a usable demand curve.") + "</p>";
+          return;
+        }
+        var labels = port.items.map(function (it) { return it.product; });
+        portWrap.innerHTML = "<h4>Portfolio: top products needing price changes</h4>" +
+          '<div class="ml-chartbox"><canvas id="ml-up-portfolio"></canvas></div>' +
+          '<table class="ml-table" style="margin-top:10px"><thead><tr><th>Product</th><th>Current</th><th>Recommended</th>' +
+          "<th>Change</th><th>Est. demand</th><th>Est. revenue</th><th>Est. profit</th><th>Reliability</th></tr></thead><tbody>" +
+          port.items.map(function (it) {
+            return "<tr><td>" + esc(it.product) + "</td><td>" + money(it.current_price) + "</td><td><b>" +
+              money(it.recommended_price) + "</b></td><td>" + fmt(it.change_pct, 1) + "%</td><td>" +
+              fmt(it.expected_demand, 1) + "</td><td>" + money(it.expected_revenue) + "</td><td>" +
+              (it.expected_profit != null ? money(it.expected_profit) : "\u2014") + "</td><td>" +
+              esc(it.reliability) + "</td></tr>";
+          }).join("") + "</tbody></table>";
+        draw("ml-up-portfolio", {
+          xLabels: labels,
+          showValues: "maxmin",
+          series: [
+            { name: "Current", color: "#6b7a99", type: "bar", data: port.items.map(function (it) { return it.current_price; }) },
+            { name: "Recommended", color: "#34d399", type: "bar", data: port.items.map(function (it) { return it.recommended_price; }) },
+          ],
+          yFmt: function (v) { return money(v, 0); },
+          title: "Current vs recommended price",
+        });
+      }
+    }).catch(function () {
+      if (portWrap) portWrap.innerHTML = "<h4>Portfolio</h4>" +
+        '<p class="ml-empty">Portfolio recommendations unavailable (backend offline).</p>';
+    });
+
+    fetch("/api/dataset/sample?dataset_id=" + encodeURIComponent(bk.datasetId) + "&n=500")
+      .then(function (r) { return r.json(); }).then(function (smp) {
+        if (!wrap) return;
+        var pc = smp.pricing_columns || {};
+        var priceKey = pc.price, unitsKey = pc.units, groupKey = pc.group;
+        if (priceKey && unitsKey) {
+          var buckets = {};
+          smp.rows.forEach(function (r) {
+            var p = +r[priceKey], u = +r[unitsKey];
+            if (!isFinite(p) || !isFinite(u) || p <= 0 || u < 0) return;
+            var key = Math.round(p);
+            if (!buckets[key]) buckets[key] = { sum: 0, n: 0 };
+            buckets[key].sum += u; buckets[key].n += 1;
+          });
+          var pts = Object.keys(buckets).map(function (k) { return { p: +k, d: buckets[k].sum / buckets[k].n }; })
+            .sort(function (a, b) { return a.p - b.p; }).slice(0, 40);
+          wrap.innerHTML += '<div class="ml-col"><h4>Demand vs price (observed data)</h4>' +
+            '<div class="ml-chartbox"><canvas id="ml-up-dvp"></canvas></div></div>';
+          draw("ml-up-dvp", {
+            xLabels: pts.map(function (t) { return t.p; }),
+            showValues: "maxmin",
+            series: [{ name: "Avg units at price", color: "#5b8cff", data: pts.map(function (t) { return t.d; }), smooth: true, area: true }],
+            yFmt: function (v) { return fmt(v, 1); },
+            title: "Average demand per rounded price (from your data)",
+          });
+        }
+        if (groupKey) {
+          var gv = smp.rows.map(function (r) { return r[groupKey]; }).filter(function (v) { return v != null; })[0];
+          var groups = [];
+          smp.rows.forEach(function (r) { if (r[groupKey] != null && groups.indexOf(String(r[groupKey])) < 0) groups.push(String(r[groupKey])); });
+          gv = groups[0] || gv;
+          wrap.innerHTML += '<div class="ml-col"><h4>Price &amp; demand history</h4>' +
+            '<label style="margin:4px 0">Product</label><select id="ml-up-trend-prod"></select>' +
+            '<div class="ml-chartbox"><canvas id="ml-up-trend"></canvas></div></div>';
+          var sel = host.querySelector("#ml-up-trend-prod");
+          groups.slice(0, 40).forEach(function (g) { sel.add(new Option(String(g), String(g))); });
+          var trend = function () {
+            var rows = smp.rows.filter(function (r) { return String(r[groupKey]) === sel.value; });
+            if (!rows.length || !priceKey || !unitsKey) return;
+            var maxPts = Math.min(rows.length, 90);
+            var sub = rows.slice(-maxPts);
+            draw("ml-up-trend", {
+              xLabels: sub.map(function (r, i) { return i; }),
+              showValues: "maxmin",
+              series: [
+                { name: "Price", color: "#8b5cf6", data: sub.map(function (r) { return +r[priceKey]; }), smooth: true },
+                { name: "Demand", color: "#5b8cff", data: sub.map(function (r) { return +r[unitsKey]; }), smooth: true, area: true },
+              ],
+              yFmt: function (v) { return fmt(v, 1); },
+              title: "Price & demand over time (last " + maxPts + " rows)",
+            });
+          };
+          sel.onchange = trend;
+          trend();
+        }
+      }).catch(function () {
+        if (wrap) wrap.innerHTML = '<div class="ml-col"><p class="ml-empty">Trend charts unavailable (backend offline).</p></div>';
+      });
   }
 
   /* ------------------------------------------------------------------ */
@@ -344,11 +448,23 @@
       rc.row("Recommended price", money(res.optimal.price), "hero");
       rc.row("Estimated demand", fmt(res.optimal.estimated_demand) + " units");
       rc.row("Estimated revenue", money(res.optimal.estimated_revenue));
+      if (res.optimal.estimated_profit != null) rc.row("Estimated profit", money(res.optimal.estimated_profit));
       rc.row("Change", fmt(res.optimal.change_pct, 1) + "% \u00B7 " + fmt(res.demand_model.elasticity, 2) + " elasticity");
+      if (res.reliability) {
+        var rel = res.reliability;
+        rc.row("Reliability", '<span class="rel-badge rel-' + esc(String(rel.level).toLowerCase()) + '">' +
+          esc(rel.level) + " \u00B7 " + rel.score + "/" + rel.max + "</span>");
+        rc.row("Reliability reasons", esc((rel.reasons || []).join(" \u00B7 ")));
+      }
       out.insertAdjacentHTML("beforeend",
         '<div class="ml-reasons">' + (res.reasons || []).map(function (r) {
           return '<div class="ml-reason"><span>' + esc(r.icon || "\u2022") + "</span><p>" + esc(r.text) + "</p></div>";
         }).join("") + "</div>" +
+        (res.rules && res.rules.length
+          ? '<div class="ml-rules"><h5>Business rules applied</h5><ul>' +
+            res.rules.map(function (r) { return "<li>" + esc(r.detail || r.rule || JSON.stringify(r)) + "</li>"; }).join("") +
+            "</ul></div>"
+          : "") +
         '<p class="ml-caveat">' + esc(res.caveat || "ML-based estimate, not guaranteed.") + "</p>");
     }).catch(function (e) {
       btn.disabled = false; btn.textContent = "Recommend price";

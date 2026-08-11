@@ -37,6 +37,20 @@ def main() -> None:
     assert_(any(t["column"] == "units_sold" for t in profile["target_candidates"]),
             "units_sold suggested as target")
     assert_(profile["suggested_target"] == "units_sold", "units_sold is the suggested target")
+    q = profile["quality"]
+    assert_(0 <= q["score"] <= 100 and q["label"] and isinstance(q["issues"], list),
+            f"quality score present ({q['score']}/100, {q['label']})")
+    assert_(isinstance(q["bad_cells"], int), "unusual-value count present")
+
+    # quality scoring catches bad data
+    bad_df = df.copy()
+    bad_df.loc[0, "price"] = -50.0
+    bad_df.loc[1, "price"] = -1.0
+    bad_df.loc[2, "cost"] = 99999.0
+    bad_q = ds.profile(bad_df)["quality"]
+    assert_(bad_q["score"] < q["score"], f"quality drops on bad values ({bad_q['score']} < {q['score']})")
+    assert_(any("negative" in i or "below cost" in i for i in bad_q["issues"]),
+            "unusual values flagged in issues")
 
     cols = pr.detect_columns(df)
     assert_(cols["price"] == "price" and cols["units"] == "units_sold", "pricing columns detected")
@@ -51,6 +65,7 @@ def main() -> None:
     assert_(abs(dset["test_rows"] / dset["rows_used"] - 0.2) < 0.02, "test split is 20%")
     names = [m["name"] for m in result["models"]]
     assert_("Linear Regression" in names and "Random Forest" in names, "linear + RF trained")
+    assert_("Gradient Boosting" in names, "Gradient Boosting trained")
     assert_("XGBoost" in names, "XGBoost trained (installed)")
     assert_(all("r2" in m and "mae" in m and "rmse" in m and "cv_r2_mean" in m
                 for m in result["models"]), "every model reports R²/MAE/RMSE/CV")
@@ -80,9 +95,36 @@ def main() -> None:
     assert_(len(r["reasons"]) >= 4, "why-this-price reasons present (" + str(len(r["reasons"])) + ")")
     assert_(r["caveat"] and "estimate" in r["caveat"], "ML-estimate caveat present")
 
+    # business rules: floor at cost, max +20% single-step increase
+    cost_col = cols["cost"]
+    row_cost = float(row0.get(cost_col)) if row0.get(cost_col) else None
+    if row_cost:
+        assert_(opt["price"] >= row_cost * 0.999,
+                f"price never below cost ({opt['price']} >= {row_cost})")
+    assert_(opt["price"] <= cur["price"] * 1.2001, "max +20% single-step increase enforced")
+    if "estimated_profit" in opt:
+        assert_(opt["estimated_profit"] >= 0, "profit never negative (floor at cost)")
+    rules = r.get("rules", [])
+    assert_(isinstance(rules, list), "business rules reported")
+    if any(ru["rule"] == "max-single-step-increase" for ru in rules):
+        assert_(opt["price"] <= cur["price"] * 1.2001, "cap rule honoured when reported")
+    rel = r.get("reliability")
+    assert_(rel and rel["level"] in ("High", "Medium", "Low") and rel["reasons"],
+            f"reliability reported ({rel['level']})")
+
     # profit objective when cost exists
     r2 = pr.recommend(df, cols, row0, objective="profit")
     assert_(r2["optimal"]["objective"] == "profit", "profit objective honoured")
+
+    print("== portfolio (per-product recommendations) ==")
+    port = pr.portfolio(df, cols, objective="revenue", top=5)
+    assert_(port["items"] and port["supported"] > 0, f"portfolio covers {port['supported']} products")
+    first = port["items"][0]
+    for k in ("product", "current_price", "recommended_price", "change_pct",
+              "expected_revenue", "reliability"):
+        assert_(k in first, f"portfolio item carries {k}")
+    assert_(abs(port["items"][0]["change_pct"]) >= abs(port["items"][-1]["change_pct"]),
+            "portfolio sorted by |change| descending")
 
     print("== unsupported case: dataset without a price column ==")
     no_price = df[[c for c in df.columns if c != "price"]]

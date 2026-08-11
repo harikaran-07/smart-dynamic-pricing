@@ -17,7 +17,7 @@ import numpy as np
 import pandas as pd
 from sklearn.model_selection import train_test_split, cross_val_score
 from sklearn.linear_model import LinearRegression
-from sklearn.ensemble import RandomForestRegressor
+from sklearn.ensemble import RandomForestRegressor, GradientBoostingRegressor
 from sklearn.metrics import r2_score, mean_absolute_error, mean_squared_error
 
 warnings.filterwarnings("ignore")
@@ -179,6 +179,9 @@ def _build_models():
     models = [
         ("Linear Regression", LinearRegression()),
         ("Random Forest", RandomForestRegressor(n_estimators=120, random_state=RANDOM_SEED, n_jobs=-1)),
+        ("Gradient Boosting", GradientBoostingRegressor(
+            n_estimators=150, learning_rate=0.08, max_depth=3,
+            random_state=RANDOM_SEED)),
     ]
     if HAS_XGB:
         models.append(("XGBoost", XGBRegressor(

@@ -19,13 +19,26 @@ import dataset as ds
 import pipeline as pl
 import pricing as pr
 
+def _json_safe(row: dict) -> dict:
+    out = {}
+    for k, v in row.items():
+        try:
+            if v is None or isinstance(v, (str, int, float, bool)):
+                out[k] = v
+            else:
+                out[k] = str(v)
+        except Exception:
+            out[k] = str(v)
+    return out
+
 _STATIC_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "dashboard"))
 
 app = FastAPI(
     title="Smart Dynamic Pricing API",
     version="1.0.0",
-    description="Dataset profiling, real ML regression pipeline "
-                "(Linear / Random Forest / XGBoost) and dynamic price recommendations.",
+    description="Dataset profiling with quality scoring, real ML regression pipeline "
+                "(Linear / Random Forest / Gradient Boosting / XGBoost) with cross-validation "
+                "and rule-constrained dynamic price recommendations.",
 )
 
 app.add_middleware(
@@ -137,6 +150,46 @@ def recommend(req: PricingRequest):
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     result["currency"] = "USD"  # display currency is handled by the frontend
     return result
+
+
+class PortfolioRequest(BaseModel):
+    dataset_id: str
+    objective: str = "revenue"
+    top: int = 10
+
+
+@app.post("/api/pricing/portfolio")
+def portfolio(req: PortfolioRequest):
+    df, rec = _get_df(req.dataset_id)
+    cols = pr.detect_columns(df)
+    result = pr.portfolio(df, cols, objective=req.objective, top=req.top)
+    result["currency"] = "USD"
+    result["objective"] = req.objective
+    return result
+
+
+@app.get("/api/dataset/sample")
+def dataset_sample(dataset_id: str, n: int = 500):
+    """Raw rows for dashboard charts (price/demand scatter, history trends)."""
+    df, _ = _get_df(dataset_id)
+    n = max(20, min(int(n), 2000))
+    cols = pr.detect_columns(df)
+    keep = set()
+    for role in ("price", "cost", "units", "competitor", "inventory", "discount", "group"):
+        if cols.get(role):
+            keep.add(cols[role])
+    # date columns for time trends
+    for c in df.columns:
+        if "date" in str(c).lower() and c not in keep:
+            keep.add(c)
+            break
+    keep_list = [c for c in df.columns if c in keep]
+    sample = df.tail(n).copy()
+    sample = sample[keep_list] if keep_list else sample
+    sample = sample.replace({float("nan"): None, float("inf"): None})
+    rows_json = [_json_safe(r) for r in sample.to_dict(orient="records")]
+    return {"columns": list(sample.columns), "rows": rows_json,
+            "pricing_columns": cols}
 
 
 if __name__ == "__main__":

@@ -31,6 +31,11 @@ PRICE_GRID_MAX = 1.45      # .. to 145% of the current price
 DEMAND_CEILING_MULT = 1.5
 MAX_ELASTICITY = -0.01     # slope must be more negative than this to be usable
 
+# Business rules (keep price recommendations realistic):
+MAX_PRICE_INCREASE_PCT = 20.0   # never recommend more than +20% in one step
+MIN_PRICE_FALLBACK_MULT = 0.5   # without a cost column, never go below 50% of current
+MAX_PORTFOLIO_GROUPS = 100      # cap for per-product portfolio analysis
+
 
 @dataclass
 class DemandModel:
@@ -219,6 +224,38 @@ def recommend(df: pd.DataFrame, cols: dict, row: dict, objective: str = "revenue
 
     lo = cur_price * PRICE_GRID_MIN
     hi = cur_price * PRICE_GRID_MAX
+
+    # ---- business rules --------------------------------------------------
+    # Rule 1: never recommend a price below the product's cost (zero/negative
+    # margin). Without a cost column, fall back to 50% of the current price.
+    # Rule 2: never increase the price more than MAX_PRICE_INCREASE_PCT at once.
+    rules = []
+    floor = None
+    if cur_cost and cur_cost > 0:
+        floor = cur_cost
+        rules.append({
+            "rule": "price-floor-at-cost",
+            "applied": True,
+            "detail": f"Candidates below cost ({cur_cost:.2f}) are excluded so the "
+                      "recommendation never produces a loss-making price.",
+        })
+    else:
+        floor = cur_price * MIN_PRICE_FALLBACK_MULT
+    lo = max(lo, floor)
+    if lo >= hi:
+        lo = max(cur_price * 0.9, floor)
+
+    cap = cur_price * (1 + MAX_PRICE_INCREASE_PCT / 100.0)
+    if hi > cap:
+        hi = cap
+        rules.append({
+            "rule": "max-single-step-increase",
+            "applied": True,
+            "detail": f"The sweep is capped at +{MAX_PRICE_INCREASE_PCT:.0f}% "
+                      f"({cur_price:.2f} → {cap:.2f}) so prices never jump more than "
+                      "20% in one recommendation.",
+        })
+
     prices = np.linspace(lo, hi, CANDIDATE_STEPS)
     candidates = []
     for p in prices:
@@ -226,11 +263,15 @@ def recommend(df: pd.DataFrame, cols: dict, row: dict, objective: str = "revenue
         if cur_inv and cur_inv > 0:
             d = min(d, cur_inv)
         revenue = p * d
-        candidates.append({
+        profit = (p - cur_cost) * d if cur_cost and cur_cost > 0 else None
+        cand = {
             "price": round(float(p), 2),
             "estimated_demand": round(float(d), 2),
             "estimated_revenue": round(float(revenue), 2),
-        })
+        }
+        if profit is not None:
+            cand["estimated_profit"] = round(float(profit), 2)
+        candidates.append(cand)
 
     if objective == "profit" and cur_cost and cur_cost > 0:
         scores = [{"score": (c["price"] - cur_cost) * c["estimated_demand"],
@@ -246,11 +287,21 @@ def recommend(df: pd.DataFrame, cols: dict, row: dict, objective: str = "revenue
         model=model, cur_price=cur_price, opt=optimal, cur_demand=cur_demand,
         cost=cur_cost, inventory=cur_inv, competitor=cur_comp, objective=objective,
         has_inventory=bool(cols["inventory"]), has_competitor=bool(cols["competitor"]),
-        has_cost=bool(cols["cost"]))
+        has_cost=bool(cols["cost"]), rules=rules)
 
     caveat = ("This recommendation is an ML-based estimate built from the uploaded "
               "dataset's own price→demand relationship. It is not a guaranteed "
               "real-world result — validate it with a small A/B change first.")
+
+    optimal_payload = {
+        "price": round(float(optimal["price"]), 2),
+        "estimated_demand": round(float(optimal["estimated_demand"]), 2),
+        "estimated_revenue": round(float(optimal["estimated_revenue"]), 2),
+        "change_pct": change_pct,
+        "objective": objective,
+    }
+    if "estimated_profit" in optimal:
+        optimal_payload["estimated_profit"] = optimal["estimated_profit"]
 
     return {
         "supports_optimization": True,
@@ -261,27 +312,131 @@ def recommend(df: pd.DataFrame, cols: dict, row: dict, objective: str = "revenue
             "n_obs": model.n_obs,
             "elasticity": round(model.elasticity, 3),
         },
+        "reliability": reliability(model, cur_price, cur_cost),
+        "rules": [r for r in rules if r.get("applied")],
         "current": {
             "price": round(float(cur_price), 2),
             "estimated_demand": round(float(cur_demand), 2),
         },
         "candidates": candidates,
-        "optimal": {
-            "price": round(float(optimal["price"]), 2),
-            "estimated_demand": round(float(optimal["estimated_demand"]), 2),
-            "estimated_revenue": round(float(optimal["estimated_revenue"]), 2),
-            "change_pct": change_pct,
-            "objective": objective,
-        },
+        "optimal": optimal_payload,
         "reasons": reasons,
         "caveat": caveat,
     }
 
 
+def reliability(model: DemandModel, cur_price: float,
+                cost: float | None) -> dict:
+    """Prediction reliability: High / Medium / Low with plain-language reasons.
+
+    Scored from the quality of the fitted demand curve, how much history the
+    model saw, and how plausible the data is — never a marketing label."""
+    points = 0
+    reasons = []
+    if model.n_obs >= 150:
+        points += 3
+        reasons.append(f"Solid history: the demand curve was fitted on {model.n_obs} rows.")
+    elif model.n_obs >= 30:
+        points += 2
+        reasons.append(f"Moderate history: only {model.n_obs} rows fit the demand curve.")
+    else:
+        points += 1
+        reasons.append(f"Thin history: just {model.n_obs} rows — treat the estimate with care.")
+
+    if model.r2 >= 0.3:
+        points += 3
+        reasons.append(f"Good demand fit (R² {model.r2:.2f} on the log-log curve).")
+    elif model.r2 >= 0.1:
+        points += 2
+        reasons.append(f"Acceptable demand fit (R² {model.r2:.2f}) — price explains part of demand.")
+    else:
+        points += 1
+        reasons.append(f"Weak demand fit (R² {model.r2:.2f}) — other factors beyond price drive sales.")
+
+    if -3.0 <= model.elasticity <= -0.3:
+        points += 2
+        reasons.append("Plausible price elasticity (no extreme extrapolation).")
+    else:
+        points += 1
+        reasons.append("Extreme elasticity detected — extrapolation beyond observed prices is risky.")
+
+    if cost and cost > 0:
+        margin = (cur_price - cost) / cur_price * 100
+        if margin > 0:
+            points += 1
+            reasons.append(f"Cost known; current margin {margin:.0f}% gives the optimisation a solid floor.")
+
+    score = min(points, 9)
+    level = "High" if score >= 7 else ("Medium" if score >= 4 else "Low")
+    return {
+        "level": level,
+        "score": score,
+        "max": 9,
+        "reasons": reasons,
+    }
+
+
+def portfolio(df: pd.DataFrame, cols: dict, objective: str = "revenue",
+              top: int = 10) -> dict:
+    """Per-product recommendations across the whole catalogue.
+
+    Uses the most recent row per product (latest sales history) and returns
+    the products with the largest recommended price changes first."""
+    if not cols["price"] or not cols["units"]:
+        return {"items": [], "supported": 0, "total": 0,
+                "note": "No price or demand column — portfolio pricing is unavailable."}
+    items = []
+    seen = 0
+    if cols["group"]:
+        group_col = cols["group"]
+        unique = [str(v) for v in df[group_col].dropna().unique()[:MAX_PORTFOLIO_GROUPS]]
+        for g in unique:
+            sub = df[df[group_col].astype(str) == g]
+            if not len(sub):
+                continue
+            row = sub.iloc[-1].to_dict()
+            rec = recommend(df, cols, row, objective=objective)
+            if not rec.get("supports_optimization"):
+                continue
+            cur_p = rec["current"]["price"]
+            opt = rec["optimal"]
+            items.append({
+                "product": g,
+                "current_price": cur_p,
+                "recommended_price": opt["price"],
+                "change_pct": opt["change_pct"],
+                "expected_demand": opt["estimated_demand"],
+                "expected_revenue": opt["estimated_revenue"],
+                "expected_profit": opt.get("estimated_profit"),
+                "elasticity": rec["demand_model"]["elasticity"],
+                "reliability": rec["reliability"]["level"],
+            })
+            seen += 1
+    else:
+        row = df.iloc[-1].to_dict()
+        rec = recommend(df, cols, row, objective=objective)
+        if rec.get("supports_optimization"):
+            items.append({
+                "product": "(whole dataset)",
+                "current_price": rec["current"]["price"],
+                "recommended_price": rec["optimal"]["price"],
+                "change_pct": rec["optimal"]["change_pct"],
+                "expected_demand": rec["optimal"]["estimated_demand"],
+                "expected_revenue": rec["optimal"]["estimated_revenue"],
+                "expected_profit": rec["optimal"].get("estimated_profit"),
+                "elasticity": rec["demand_model"]["elasticity"],
+                "reliability": rec["reliability"]["level"],
+            })
+            seen = 1
+    items.sort(key=lambda it: abs(it["change_pct"]), reverse=True)
+    return {"items": items[:top], "supported": seen, "total": seen,
+            "note": None}
+
+
 def build_reasons(model: DemandModel, cur_price: float, opt: dict, cur_demand: float,
                   cost: float | None, inventory: float | None, competitor: float | None,
                   objective: str, has_inventory: bool, has_competitor: bool,
-                  has_cost: bool) -> list[dict]:
+                  has_cost: bool, rules: list | None = None) -> list[dict]:
     reasons = []
     delta = opt["price"] - cur_price
     if delta > 0:
@@ -379,6 +534,12 @@ def build_reasons(model: DemandModel, cur_price: float, opt: dict, cur_demand: f
         "text": f"Demand model: {model.kind}-level log-log fit on {model.n_obs} rows "
                 f"(R² {model.r2:.3f}) — a statistical estimate, not a guarantee.",
     })
+    for rule in (rules or []):
+        if rule.get("applied"):
+            reasons.append({
+                "icon": "⚖", "tone": "flat",
+                "text": f"Business rule applied: {rule['detail']}",
+            })
     return reasons
 
 

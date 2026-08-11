@@ -36,9 +36,7 @@ assert(P.insightText(null) === "", "insightText handles null analytics");
 const demoCusts = P.customerList();
 assert(demoCusts.length >= 20, "customer list generated from demo segments");
 
-// ---- demo mode extras (ML comparison + objectives) -------------------
-const base = P.trainBaseline(P.rows());
-assert(base.r2 !== null && base.mae >= 0 && base.rmse >= 0, "baseline model reports R²/MAE/RMSE");
+// ---- demo mode extras (ML + objectives) -----------------------------
 const linModel = P.analytics().model;
 assert(linModel.r2 !== null, "linear model reports R²");
 const profRec = P.optimizePrice(P.productById("P001"), { objective: "profit" });

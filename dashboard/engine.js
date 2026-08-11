@@ -500,46 +500,6 @@
     };
   }
 
-  /* Baseline model for honest comparison: predicts each product's average
-   daily units scaled by its seasonal factor. Evaluated on the SAME
-   deterministic 80/20 split as trainModel (same seed, same row order). */
-  function trainBaseline(rows) {
-    var t0 = now();
-    var rnd = mulberry(777);
-    var test = [], train = [];
-    rows.forEach(function (r) {
-      (rnd() < 0.2 ? test : train).push(r);
-    });
-    if (!test.length) test = train.slice(0, Math.max(1, Math.floor(train.length * 0.2)));
-    var byProduct = {};
-    rows.forEach(function (r) {
-      if (!byProduct[r.product_id]) byProduct[r.product_id] = { sum: 0, n: 0 };
-      byProduct[r.product_id].sum += r.units_sold;
-      byProduct[r.product_id].n += 1;
-    });
-    Object.keys(byProduct).forEach(function (id) { byProduct[id].avg = byProduct[id].sum / byProduct[id].n; });
-    var yMean = rows.reduce(function (a, r) { return a + r.units_sold; }, 0) / rows.length;
-    var ssRes = 0, ssTot = 0, mae = 0, rmse = 0;
-    test.forEach(function (r) {
-      var p = byProduct[r.product_id].avg * (r.seasonal_factor || 1);
-      var e = p - r.units_sold;
-      ssRes += e * e; mae += Math.abs(e); rmse += e * e;
-      ssTot += (r.units_sold - yMean) * (r.units_sold - yMean);
-    });
-    var r2 = ssTot > 0 ? 1 - ssRes / ssTot : 0;
-    mae = mae / test.length;
-    rmse = Math.sqrt(rmse / test.length);
-    return {
-      backbone: "client-baseline", name: "Seasonal Baseline (product mean × season)",
-      features: ["product mean", "seasonal factor"],
-      r2: Math.round(r2 * 1000) / 1000, mae: Math.round(mae * 100) / 100, rmse: Math.round(rmse * 100) / 100,
-      trainSize: train.length, testSize: test.length, yMean: yMean,
-      trainingTimeMs: Math.round((now() - t0) * 10) / 10,
-      status: "trained", trainedAt: new Date().toISOString(),
-      predict: function (r) { return byProduct[r.product_id] ? byProduct[r.product_id].avg * (r.seasonal_factor || 1) : yMean; },
-    };
-  }
-
   /* ------------------------------------------------------------------ */
   /* analytics                                                          */
   /* ------------------------------------------------------------------ */
@@ -1274,7 +1234,6 @@
     cleanRows: cleanRows,
     computeAnalytics: computeAnalytics,
     trainModel: trainModel,
-    trainBaseline: trainBaseline,
     optimizePrice: optimizePrice,
     manualPredict: manualPredict,
     rlPrice: rlPrice,
