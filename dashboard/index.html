@@ -206,10 +206,6 @@
     </select>
     <input id="currency-rate" class="rate-input" type="number" step="0.01" min="0" value="83"
       title="Exchange rate (1 USD = ?)" style="display:none"/>
-    <div class="mode-switch" id="mode-switch" title="Choose how the dashboard runs">
-      <button id="mode-demo" class="mode-btn active">Demo Mode</button>
-      <button id="mode-upload" class="mode-btn">Upload Dataset</button>
-    </div>
     <span id="ds-badge" class="ds-badge" style="display:none"></span>
     <span id="health" class="pill">checking</span>
   </div>
@@ -516,7 +512,7 @@ window.PricingDashboard = {
     }catch(e){
       $("health").textContent = "No dataset loaded";
       $("health").className = "pill dim";
-      $("metrics").innerHTML = `<div class="row"><span>Status</span><b>Switch to Demo Mode or upload a CSV dataset to run the dashboard</b></div>`;
+      $("metrics").innerHTML = `<div class="row"><span>Status</span><b>Upload a CSV dataset to run the dashboard</b></div>`;
     }
   },
 };
@@ -534,27 +530,7 @@ function syncDatasetSections(){
   if (el) el.style.display = hide ? "none" : "";
 }
 
-/* Applies the selected mode. Demo Mode runs fully in-browser; Upload Mode
- * sends the dataset to the backend ML pipeline. */
-function setMode(mode){
-  if (!window.PricingData) return;
-  var demoBtn = document.getElementById("mode-demo");
-  var upBtn = document.getElementById("mode-upload");
-  if (mode === "demo"){
-    window.PricingData.applyDemo();
-    window.PricingBackend = null;
-    if (window.PricingUI && window.PricingUI.setDataSourceUI) window.PricingUI.setDataSourceUI("demo", "");
-    demoBtn.classList.add("active"); upBtn.classList.remove("active");
-    if (window.PricingUI) window.PricingUI.toast("Demo Mode active",
-      "All numbers come from the in-browser model on the generated demo dataset.", "ok");
-  } else {
-    if (window.PricingUI) window.PricingUI.openModal();
-    return;
-  }
-  refreshEverything2();
-}
-window.setMode = setMode;
-
+/* Applies the selected currency and re-renders every panel that shows money. */
 function refreshEverything2(){
   if (window.PricingML) window.PricingML.render();
   if (window.PricingML) window.PricingML.renderPrice();
@@ -593,17 +569,10 @@ window.syncDatasetSections = syncDatasetSections;
 async function health(){
   const pill = $("health");
   const pd = window.PricingData;
-  if (pd){
-    if (pd.active() && pd.source() === "upload"){
-      pill.textContent = "Uploaded dataset · backend ML";
-      pill.className = "pill ok";
-      return;
-    }
-    if (pd.active()){
-      pill.textContent = "Demo Mode · in-browser";
-      pill.className = "pill ok";
-      return;
-    }
+  if (pd && pd.active()){
+    pill.textContent = "Uploaded dataset · model ready";
+    pill.className = "pill ok";
+    return;
   }
   try{
     const h = await dataApi("/api/health");
@@ -686,14 +655,6 @@ window.API_BASE = window.API_BASE || "";
 window.PricingAnalytics && window.PricingAnalytics.mount();
 window.PricingPredict && window.PricingPredict.mount();
 window.PricingUI && window.PricingUI.boot();
-
-/* mode switcher wiring */
-(function () {
-  var demoBtn = document.getElementById("mode-demo");
-  var upBtn = document.getElementById("mode-upload");
-  if (demoBtn) demoBtn.onclick = function () { setMode("demo"); };
-  if (upBtn) upBtn.onclick = function () { setMode("upload"); };
-})();
 
 /* currency selector wiring */
 (function () {

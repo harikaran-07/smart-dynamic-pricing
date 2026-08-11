@@ -1,6 +1,7 @@
 /* Live smoke test: fetch the deployed dashboard assets from GitHub Pages
  * and boot them against the same DOM/canvas shim used by test_dashboard_boot.
- * Verifies Demo Mode boots in production and renders the ML Pipeline panels.
+ * Verifies the upload-only experience boots in production: the page starts
+ * empty (no built-in demo data) and shows the upload empty states.
  */
 "use strict";
 const ROOT = "https://harikaran-07.github.io/smart-dynamic-pricing/";
@@ -84,17 +85,19 @@ async function main() {
   }
   if (!ok) { console.error("ABORT: assets missing from Pages"); process.exit(1); }
   installURLShim();
-  assert(win.PricingData.analytics() !== null, "demo analytics computed in production");
+  assert(win.PricingData.analytics() === null, "no built-in demo data on live Pages (starts empty)");
+  assert(win.PricingData.source() === "", "engine defaults to empty on live Pages");
   assert(!!win.PricingML, "PricingML present on live Pages");
   win.PricingML.render();
-  assert(doc.getElementById("ml-steps").innerHTML.indexOf("ml-step") >= 0, "stepper rendered on live Pages");
-  assert(doc.getElementById("ml-root").children.length > 0, "ML demo panels rendered on live Pages");
+  assert(doc.getElementById("ml-steps").innerHTML === "", "stepper empty until upload on live Pages");
+  assert(doc.getElementById("ml-root").innerHTML.indexOf("Upload a CSV dataset") >= 0, "ML upload empty state rendered on live Pages");
   win.PricingML.renderPrice();
-  assert(doc.getElementById("ml-price-root").children.length > 0, "ML price panel rendered on live Pages");
+  assert(doc.getElementById("ml-price-root").innerHTML.indexOf("Upload a dataset") >= 0, "ML price empty state rendered on live Pages");
   const rep = win.PricingData.report();
-  assert(rep.size > 0, "demo report has rows (size " + rep.size + ")");
+  assert(rep.size === 0, "empty report before upload (size " + rep.size + ")");
   const tab = win.PricingData.predictionTable();
-  assert(tab.length > 0, "prediction table covers " + tab.length + " products");
+  assert(tab.length === 0, "empty prediction table before upload");
+  assert(win.PricingData.assistantBundle() === null, "no assistant bundle on live Pages without upload");
   win.PricingData.setCurrency("GBP", 0.79);
   assert(win.PricingData.getCurrency().symbol === "£", "GBP currency works live");
   win.PricingData.setCurrency("USD");

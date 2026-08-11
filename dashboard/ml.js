@@ -1,14 +1,10 @@
 /* ml.js — ML Pipeline module for the Smart Dynamic Pricing dashboard.
  *
- * Renders the honest ML story for both modes:
- *   Demo Mode   — client-side: a single honest Linear Regression model,
- *                 feature strengths, actual-vs-predicted, client
- *                 recommendations (clearly labelled as demo estimates).
- *   Upload Mode — results of the backend pipeline: model comparison,
- *                 best-model metrics with plain-language labels, feature
- *                 importances, test-set actual-vs-predicted, per-row
- *                 prediction table and the "why this price" optimisation
- *                 (with the statistical caveat).
+ * Upload-only: renders the honest ML story from the backend pipeline —
+ * model comparison, best-model metrics with plain-language labels, feature
+ * importances, test-set actual-vs-predicted, per-row prediction table,
+ * the "why this price" optimisation (with the statistical caveat) and the
+ * portfolio / demand-curve charts.
  *
  * Exposes window.PricingML.
  */
@@ -42,12 +38,6 @@
     root.__mlCharts[id] = new C(host || document.getElementById(id), opts);
   }
 
-  var STEPS_DEMO = [
-    ["Dataset", "Demo dataset generated in-browser (4,380 sales rows)"],
-    ["Preprocessing", "Missing values & duplicates analysed in-browser"],
-    ["Training", "Single linear model trained & evaluated in-browser"],
-    ["Pricing", "Recommendations from the fitted demand curve"],
-  ];
   var STEPS_UPLOAD = [
     ["Dataset", "CSV uploaded, validated & parsed by the backend"],
     ["Preprocessing", "Missing values, duplicates & target selection"],
@@ -80,83 +70,6 @@
   function metricRow(k, v, note) {
     return '<div class="ml-row"><span>' + esc(k) + "</span><b>" + v + "</b>" +
       (note ? "<i>" + esc(note) + "</i>" : "") + "</div>";
-  }
-
-  /* ------------------------------------------------------------------ */
-  /* Demo-mode rendering (single real in-browser model — the comparison  */
-  /* of Random Forest / Gradient Boosting / XGBoost runs on the backend  */
-  /* in Upload Mode, never on fake client models)                        */
-  /* ------------------------------------------------------------------ */
-  function demoModel() {
-    var a = P.analytics();
-    return a.model;
-  }
-
-  function demoModelCard(lin) {
-    return '<div class="ml-model-summary">' +
-      metricRow("Model", "<b>Linear Regression (ridge)</b>", "in-browser model on the demo dataset — Demo Mode") +
-      metricRow("R\u00B2", fmt(lin.r2, 4), "share of demand variance explained on unseen rows (0 = no better than the mean)") +
-      metricRow("MAE", fmt(lin.mae, 2) + " units", "average absolute error") +
-      metricRow("RMSE", fmt(lin.rmse, 2) + " units", "root mean squared error \u2014 penalises large errors more") +
-      metricRow("Trained on", fmt(lin.trainSize) + " rows \u00B7 tested on " + fmt(lin.testSize), "deterministic 80/20 split in-browser") +
-      "</div>" +
-      '<p class="ml-caveat">Demo Mode trains a single in-browser linear model. Upload a dataset to compare ' +
-      "Linear Regression, Random Forest, Gradient Boosting and XGBoost on the backend.</p>";
-  }
-
-  function featureStrengthChart() {
-    var i = P.explain(); // [{feature, importance}]
-    if (!i || !i.length) return "";
-    var feats = i.slice(0, 8);
-    draw("ml-demo-imp", {
-      xLabels: feats.map(function (f) { return f.feature; }),
-      series: [{ name: "|coef|", color: "#5b8cff", type: "bar", data: feats.map(function (f) { return f.importance; }) }],
-      yFmt: function (v) { return fmt(v, 3); },
-      title: "Feature strength (|standardised coefficient|)",
-    });
-    return "";
-  }
-
-  function avpDemo(pid) {
-    var s = P.demandSeries(pid, 30, 14);
-    if (!s.dates.length) return "";
-    draw("ml-demo-avp", {
-      xLabels: s.dates.map(function (d) { return String(d).slice(5); }),
-      series: [
-        { name: "Actual", color: "#5b8cff", data: s.actual, smooth: true, area: true },
-        { name: "Predicted", color: "#34d399", data: s.predicted, smooth: true },
-      ],
-      yFmt: function (v) { return fmt(v, 1); },
-      title: "Actual vs predicted demand (last 30 days + 14-day forecast)",
-    });
-    return "";
-  }
-
-  function demoPanel(rootEl) {
-    var lin = demoModel();
-    var host = document.createElement("div");
-    host.className = "ml-host";
-    host.innerHTML =
-      demoModelCard(lin) +
-      '<div class="ml-grid2">' +
-      '<div class="ml-col"><h4>Feature strength</h4><div class="ml-chartbox"><canvas id="ml-demo-imp"></canvas></div></div>' +
-      '<div class="ml-col"><h4>Demand forecast (demo estimate)</h4>' +
-      "<label style='margin:8px 0 4px'>Product</label>" +
-      '<select id="ml-demo-prod"></select>' +
-      '<div class="ml-chartbox"><canvas id="ml-demo-avp"></canvas></div></div>' +
-      "</div>";
-    rootEl.innerHTML = "";
-    rootEl.appendChild(host);
-
-    var prods = P.analytics().productList.map(function (p) { return p.product_id; });
-    var sel = host.querySelector("#ml-demo-prod");
-    prods.forEach(function (id) { sel.add(new Option(id, id)); });
-    sel.value = prods[0];
-    var refreshAvp = function () { avpDemo(sel.value); };
-    sel.onchange = refreshAvp;
-
-    featureStrengthChart();
-    refreshAvp();
   }
 
   /* ------------------------------------------------------------------ */
@@ -379,45 +292,8 @@
   }
 
   /* ------------------------------------------------------------------ */
-  /* Price recommendation (handled per mode)                             */
+  /* Price recommendation (backend-driven)                               */
   /* ------------------------------------------------------------------ */
-  function pricePanelDemo(rootEl) {
-    var host = document.createElement("div");
-    host.className = "ml-host ml-price";
-    host.innerHTML =
-      '<div class="ml-grid2"><div class="ml-col">' +
-      "<label>Product ID</label><select id='ml-demo-price-prod'></select>" +
-      "<label>Objective</label><select id='ml-demo-price-obj'><option value='revenue'>Maximise revenue</option><option value='profit'>Maximise profit</option></select>" +
-      '<button id="ml-demo-price-run" class="ml-btn">Recommend price</button>' +
-      "</div><div class='ml-col'><div id='ml-demo-price-out' class='result empty'>Run a recommendation to see why this price.</div></div></div>";
-    rootEl.innerHTML = "";
-    rootEl.appendChild(host);
-    var prods = P.analytics().productList.map(function (p) { return p.product_id; });
-    var sel = host.querySelector("#ml-demo-price-prod");
-    prods.forEach(function (id) { sel.add(new Option(id, id)); });
-    host.querySelector("#ml-demo-price-run").onclick = function () {
-      var prodId = sel.value;
-      var obj = host.querySelector("#ml-demo-price-obj").value;
-      var prod = P.productById(prodId);
-      var rec = P.optimizePrice(prod, { objective: obj, inventory: prod.inventory, competitor_price: prod.competitor_price });
-      var why = P.recommendReasons(prod, { objective: obj, inventory: prod.inventory, competitor_price: prod.competitor_price });
-      var reasons = why.reasons;
-      var rc = resultEl(host.querySelector("#ml-demo-price-out"));
-      rc.head("Demo recommendation", "objective \u00B7 " + rec.objective);
-      rc.row("Current price", money(prod.base_price));
-      rc.row("Recommended price", money(rec.recommended_price), "hero");
-      rc.row("Expected demand", fmt(rec.expected_demand) + " units/day");
-      rc.row("Expected revenue", money(rec.expected_revenue));
-      rc.row("Expected profit", money(rec.expected_profit));
-      rc.row("Change", rec.price_change_pct + "%");
-      host.querySelector("#ml-demo-price-out").insertAdjacentHTML("beforeend",
-        '<div class="ml-reasons">' + reasons.map(function (r) {
-          return '<div class="ml-reason"><span>' + esc(r.icon || "\u2022") + "</span><p>" + esc(r.text) + "</p></div>";
-        }).join("") + "</div>" +
-        '<p class="ml-caveat">Demo estimate from the in-browser model \u2014 not a guarantee.</p>');
-    };
-  }
-
   function uploadPriceAction(objSel, prodSel, out) {
     var obj = objSel.value;
     var prodId = prodSel.value;
@@ -470,7 +346,7 @@
       btn.disabled = false; btn.textContent = "Recommend price";
       root.PricingUI.spinner(false);
       showErr(out, e && e.message ? e.message : String(e));
-      toast("Backend offline", "Upload Mode needs the backend. Running in Demo Mode works offline.", "err");
+      toast("Backend offline", "Price optimisation needs the backend. Upload again once it is reachable.", "err");
     });
   }
 
@@ -521,6 +397,11 @@
   /* ------------------------------------------------------------------ */
   /* public API                                                          */
   /* ------------------------------------------------------------------ */
+  var EMPTY_ML =
+    '<div class="ml-empty" style="padding:16px">Upload a CSV dataset to run the ML pipeline: ' +
+    "the backend compares Linear Regression, Random Forest, Gradient Boosting and XGBoost " +
+    "(5-fold cross-validation + hold-out metrics) and drives rule-constrained price recommendations.</div>";
+
   function render() {
     P = root.PricingData;
     if (!P) return;
@@ -530,18 +411,20 @@
     var offline = bk && bk.offline && !bk.train;
     var stepsEl = document.getElementById("ml-steps");
     if (stepsEl) {
-      if (offline) stepsEl.innerHTML = steps("upload", 2) +
-        '<p class="ml-empty" style="margin:10px 2px 0">Backend unreachable \u2014 dataset mirrored in-browser; switch to Demo Mode or restart the backend to run the full ML pipeline.</p>';
-      else stepsEl.innerHTML = steps(isUp ? "upload" : "demo", isUp ? 4 : 3);
+      if (!P.active()) stepsEl.innerHTML = "";
+      else if (offline) stepsEl.innerHTML = steps("upload", 2) +
+        '<p class="ml-empty" style="margin:10px 2px 0">Backend unreachable \u2014 dataset mirrored in-browser; restart the backend and re-upload to run the full ML pipeline.</p>';
+      else stepsEl.innerHTML = steps("upload", isUp ? 4 : 2);
     }
     var body = document.getElementById("ml-root");
     if (!body) return;
     body.className = "ml-body";
-    if (isUp) uploadPanel(body);
+    if (!P.active()) body.innerHTML = EMPTY_ML;
+    else if (isUp) uploadPanel(body);
     else if (offline) {
       body.innerHTML = '<div class="ml-empty" style="padding:14px">Backend ML pipeline offline. The uploaded dataset is available in the in-browser panels (Analytics, Prediction Center, Decision Engine), which use the client-side model as a transparent mirror of the same data.</div>';
       destroyChart("ml-up-compare"); destroyChart("ml-up-imp"); destroyChart("ml-up-avp");
-    } else demoPanel(body);
+    }
   }
 
   function renderPrice() {
@@ -550,8 +433,12 @@
     BACKEND = backend();
     var el = document.getElementById("ml-price-root");
     if (!el) return;
+    if (!P.active()) {
+      el.innerHTML = '<div class="ml-empty" style="padding:16px">Upload a dataset to get rule-constrained price recommendations with reliability scores.</div>';
+      return;
+    }
     if (backend() && backend().train) pricePanelUpload(el);
-    else pricePanelDemo(el);
+    else el.innerHTML = '<div class="ml-empty" style="padding:16px">Price recommendations need the backend. Upload again once it is reachable.</div>';
   }
 
   root.PricingML = { render: render, renderPrice: renderPrice, steps: steps };

@@ -1,7 +1,6 @@
 /* upload.js — Data Source control, upload workflow, notifications and UX
  * helpers for the Smart Dynamic Pricing dashboard.
  *
- * - replaces the old "Demo Mode" indicator with an Upload Dataset control
  * - CSV / Excel upload with progress, preview (first 10 rows), column
  *   detection, auto column mapping, and validation messages
  * - toasts, loading overlay and the reset/refresh plumbing shared by panels
@@ -341,10 +340,6 @@
     setStackLabel("");
     closeModal();
     setDataSourceUI("upload", state.fileName);
-    var demoBtn = document.getElementById("mode-demo");
-    var upBtn = document.getElementById("mode-upload");
-    if (demoBtn) demoBtn.classList.remove("active");
-    if (upBtn) upBtn.classList.add("active");
     refreshEverything(P.analytics());
     if (how === "ok") document.getElementById("health").textContent = "Uploaded dataset · backend ML";
     else if (how === "offline") document.getElementById("health").textContent = "Backend offline · client mirror";

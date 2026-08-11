@@ -20,29 +20,14 @@ function approx(a, b, tol, msg) {
   assert(Math.abs(a - b) <= tol, msg + " (" + a + " ≈ " + b + ")");
 }
 
-// ---- demo mode (default: full in-browser experience) -----------------
-assert(P.source() === "demo" && P.active(), "engine starts in Demo Mode and is active");
+// ---- empty state until upload (no built-in demo data) ----------------
+assert(P.source() === "" && !P.active(), "engine starts empty (no demo data)");
+assert(P.analytics() === null, "no analytics before a dataset is uploaded");
 assert(P.assistantBundle() === null, "no assistant bundle without an uploaded dataset");
-const eRep = P.report();
-assert(eRep.size > 0 && eRep.preview.length > 0, "demo report has rows and preview");
-assert(P.predictionTable().length > 0, "prediction table covers demo catalogue");
-assert(P.exportPredictions().csv.split("\n").length > 1, "export CSV has header + product rows");
-assert(P.productById("P001") !== null, "productById returns a demo product");
-assert(P.salesSeries("P001").units_sold.length > 0, "demo sales series has daily units");
-assert(Array.isArray(P.explain().top_features), "explain falls back to default features");
-const eMan = P.manualPredict({ price: 49.99, cost: 22, inventory: 50 });
-assert(eMan.optimal.recommended_price > 0, "manual prediction works in demo mode");
+assert(P.rows() === null, "no rows before upload");
+assert(P.predictionTable().length === 0, "empty prediction table before upload");
 assert(P.insightText(null) === "", "insightText handles null analytics");
-const demoCusts = P.customerList();
-assert(demoCusts.length >= 20, "customer list generated from demo segments");
-
-// ---- demo mode extras (ML + objectives) -----------------------------
-const linModel = P.analytics().model;
-assert(linModel.r2 !== null, "linear model reports R²");
-const profRec = P.optimizePrice(P.productById("P001"), { objective: "profit" });
-assert(profRec.objective === "profit" && !isNaN(profRec.expected_profit), "profit objective honoured by optimizePrice");
-P.applyDemo();
-assert(P.source() === "demo" && P.analytics() !== null, "applyDemo re-arms the demo dataset");
+assert(P.report() === null || P.report().size === 0, "empty report before upload");
 
 // ---- CSV parsing ----------------------------------------------------
 const csv = 'product_id,date,price,cost,units_sold\n' +

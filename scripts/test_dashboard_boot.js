@@ -95,14 +95,14 @@ function load(file) {
   try { win.PricingAnalytics.mount(); } catch (e) { bootErr = e; }
   assert(!bootErr, "PricingAnalytics.mount() boots without throwing" + (bootErr ? " — " + bootErr.message : ""));
   assert(els["px-root"].children.length > 0, "analytics panel rendered into #px-root");
-  assert(win.PricingData.analytics() !== null, "analytics available immediately in Demo Mode");
-  assert(win.PricingData.source() === "demo", "engine defaults to Demo Mode");
+  assert(win.PricingData.analytics() === null, "no analytics until a dataset is uploaded");
+  assert(win.PricingData.source() === "", "engine starts empty (no demo data)");
   assert(win.PricingML && typeof win.PricingML.render === "function", "PricingML module exposes render()");
   win.PricingML.render();
-  assert(doc.getElementById("ml-steps").innerHTML.indexOf("ml-step") >= 0, "ML pipeline stepper rendered");
-  assert(doc.getElementById("ml-root").children.length > 0, "ML pipeline panels rendered for demo mode");
+  assert(doc.getElementById("ml-steps").innerHTML === "", "ML pipeline stepper empty before upload");
+  assert(doc.getElementById("ml-root").innerHTML.indexOf("Upload a CSV dataset") >= 0, "ML pipeline shows upload empty state");
   win.PricingML.renderPrice();
-  assert(doc.getElementById("ml-price-root").children.length > 0, "ML price panel rendered for demo mode");
+  assert(doc.getElementById("ml-price-root").innerHTML.indexOf("Upload a dataset") >= 0, "ML price panel shows upload empty state");
   assert(els["px-content"].children.length > 0, "analytics panel shows an empty state without data");
 
   bootErr = null;

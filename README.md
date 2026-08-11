@@ -127,19 +127,17 @@ curl -X POST http://127.0.0.1:8000/api/manual \
 Dashboard: open `http://127.0.0.1:8000/` for live price recommendations, AI negotiation,
 model performance and a sales-history chart. Interactives: Swagger at `/docs`.
 
-## Static demo / GitHub Pages
+## GitHub Pages
 
-The dashboard auto-detects whether the FastAPI backend is reachable. When it is not
-(e.g. when the page is served as a static site from GitHub Pages), it falls back to a
-self-contained **demo mode** that simulates all endpoints (`/api/price`, `/api/negotiate`,
-`/api/rl-price`, `/api/overview`, `/api/sales/*`, `/api/manual`, `/api/insights`,
-`/api/products/detail`, `/api/customers/detail`) in the browser — no backend required.
-The **AI Pricing Assistant** works in both modes.
+The dashboard starts empty: every panel asks you to **Upload Dataset** until a CSV
+is applied. Without the backend, the dataset is mirrored in-browser (analytics,
+Prediction Center, Decision Engine use a transparent client-side model of the same
+data); the ML Pipeline and price recommendations need the backend, which is detected
+via `window.API_BASE` (set it to your Render URL when hosting on Pages).
 
 ### Data Source & upload
 
-The header **Data Source** dropdown switches between the built-in **Demo Dataset** and an
-**Upload Dataset** flow (CSV / Excel):
+The header **Data Source** control opens an **Upload Dataset** flow (CSV / Excel):
 
 - files are parsed (Excel via the lazily-loaded SheetJS CDN) with a progress bar,
 - columns are auto-detected and mapped to required features (fuzzy matching + manual
@@ -153,7 +151,7 @@ The header **Data Source** dropdown switches between the built-in **Demo Dataset
 
 ### Prediction Center (Dataset & Manual modes)
 
-The **Prediction Center** replaces the old demo model block with a 5-step workflow
+The **Prediction Center** (Dataset & Manual modes) offers a 5-step workflow
 (Select Mode → Enter/Upload Data → Analyze → Predict → View Results):
 
 - **Dataset Mode** — shows dataset analytics (size, features, missing values, duplicates,
@@ -174,9 +172,8 @@ Profit / Seasonal / Inventory tabs) renders the revenue, profit, demand and seas
 charts with tooltips, zoom/pan, legends, grid lines, confidence bands, reference lines,
 and automatic highest/lowest markers. The **Pricing** tab adds Actual vs Recommended
 Price, Demand vs Price, Revenue & Profit comparison, Sales/Demand trend, Inventory vs
-Price and Competitor vs Recommended charts. Use **Refresh Model** to retrain,
-**Reset Dashboard** to restore the sample dataset, and **Export Predictions (CSV)** to
-download per-product price recommendations.
+Price and Competitor vs Recommended charts. Use **Refresh Model** to retrain and
+**Export Predictions (CSV)** to download per-product price recommendations.
 
 ### Currency
 
@@ -188,7 +185,7 @@ the conversion (default 1 USD = 83 INR) can be adjusted.
 Verify the new pipeline and modules with the Node harnesses:
 
 ```bash
-node scripts/test_dashboard_demo.js   # demo endpoints + assistant engine
+node scripts/test_dashboard_demo.js   # assistant engine (AICore + chat bootstrap)
 node scripts/test_engine.js           # CSV/mapping/cleaning/model/analytics/forecast/currency
 node scripts/test_dashboard_boot.js   # DOM-shim boot for charts/engine/analytics/predict/upload
 python scripts/test_backend.py        # dataset quality / pipeline / pricing rules / portfolio

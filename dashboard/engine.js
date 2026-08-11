@@ -28,15 +28,6 @@
 
   var SYNTH_CATEGORIES = ["Electronics", "Apparel", "Beauty", "Home & Kitchen", "Sports"];
 
-  var DEMO_PRODUCTS = [
-    ["P001", 146.90, 63.24, "Electronics"], ["P002", 38.50, 18.95, "Apparel"],
-    ["P003", 12.99, 5.60, "Beauty"], ["P004", 74.00, 36.10, "Home & Kitchen"],
-    ["P005", 29.90, 13.25, "Sports"], ["P006", 55.20, 27.80, "Apparel"],
-    ["P007", 92.40, 44.90, "Electronics"], ["P008", 18.75, 8.15, "Beauty"],
-    ["P009", 41.30, 19.60, "Sports"], ["P010", 120.00, 58.00, "Home & Kitchen"],
-    ["P011", 66.60, 31.20, "Electronics"], ["P012", 24.40, 10.90, "Beauty"],
-  ];
-
   /* Seasonal curve per month (index 1..12). */
   var SEASONAL = { 1: 1.12, 2: 0.92, 3: 1.0, 4: 1.02, 5: 0.96, 6: 0.84, 7: 0.78, 8: 0.88, 9: 1.08, 10: 1.32, 11: 1.5, 12: 1.24 };
   var MONTH_NAMES = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
@@ -74,54 +65,6 @@
     return CURRENCY + Number(v).toLocaleString(CURRENCY_LOCALE, {
       maximumFractionDigits: decimals == null ? 2 : decimals,
     });
-  }
-
-  /* ------------------------------------------------------------------ */
-  /* demo dataset generation (Demo Mode — runs fully in the browser)     */
-  /* ------------------------------------------------------------------ */
-  function generateDemoDataset(days) {
-    days = days || 365;
-    var rnd = mulberry(20260701);
-    var rows = [];
-    var today = new Date();
-    today.setHours(12, 0, 0, 0);
-    var i, p, d, day, product;
-    for (i = 0; i < DEMO_PRODUCTS.length; i++) {
-      p = DEMO_PRODUCTS[i];
-      var base = 8 + Math.round(rnd() * 26);
-      var phase = rnd() * Math.PI * 2;
-      var inv = 60 + Math.round(rnd() * 300);
-      for (d = days - 1; d >= 0; d--) {
-        var dt = new Date(today.getTime() - d * 86400000);
-        var month = dt.getMonth() + 1;
-        var dayOfMonth = dt.getDate();
-        var dow = dt.getDay();
-        var isWeekend = dow === 0 || dow === 6;
-        var holiday = (month === 11) || (month === 12 && dayOfMonth >= 20) ||
-          (month === 1 && dayOfMonth <= 5) || (month === 4 && dayOfMonth >= 10 && dayOfMonth <= 15) ? 1 : 0;
-        var seas = SEASONAL[month] * (0.85 + 0.3 * Math.sin(phase + month / 12 * Math.PI * 2));
-        var noise = 0.82 + rnd() * 0.36;
-        var units = Math.max(1, Math.round(base * seas * (isWeekend ? 1.28 : 1) * (holiday ? 1.25 : 1) * noise));
-        var price = Math.round(p[1] * (0.98 + rnd() * 0.04) * 100) / 100;
-        var comp = Math.round(p[1] * 1.04 * (0.97 + rnd() * 0.06) * 100) / 100;
-        inv = Math.max(4, Math.min(700, Math.round(inv - units + 15 + rnd() * 16)));
-        rows.push({
-          product_id: p[0],
-          date: dt.toISOString().slice(0, 10),
-          category: p[3],
-          price: price,
-          cost: p[2],
-          competitor_price: comp,
-          inventory: inv,
-          units_sold: units,
-          is_weekend: isWeekend ? 1 : 0,
-          month: month,
-          seasonal_factor: Math.round(seas * 100) / 100,
-          holiday: holiday,
-        });
-      }
-    }
-    return rows;
   }
 
   /* ------------------------------------------------------------------ */
@@ -1110,7 +1053,7 @@
     if (!a) return "";
     var parts = [];
     var records = a.records.toLocaleString("en-IN");
-    parts.push("The " + (getState().source === "upload" ? "uploaded" : "demo") + " dataset contains " + records +
+    parts.push("The uploaded dataset contains " + records +
       " sales records across " + a.products + " products over " + a.months + " months.");
     var topP = a.top_profit[0];
     if (topP) parts.push("Product " + topP.product_id + " generates the highest profit (" + fmtMoney(topP.profit, 0) + ").");
@@ -1136,7 +1079,7 @@
   /* state & public API                                                 */
   /* ------------------------------------------------------------------ */
   var state = {
-    source: "demo",
+    source: "",
     meta: null,
     normalized: null,
     missing: null,
@@ -1146,21 +1089,12 @@
   function getState() { return state; }
 
   function computeIfNeeded() {
-    if (!state.normalized) { state.normalized = generateDemoDataset(); }
+    if (!state.normalized) return null;
     if (!state.analytics) {
       state.missing = { totalMissing: 0, byColumn: {} };
       state.analytics = computeAnalytics(state.normalized, trainModel(state.normalized));
     }
     return state.analytics;
-  }
-
-  function applyDemo() {
-    state.source = "demo";
-    state.meta = null;
-    state.normalized = null;
-    state.analytics = null;
-    state._customers = null;
-    computeIfNeeded();
   }
 
   function applyUpload(rows, meta) {
@@ -1247,13 +1181,12 @@
     customerList: customerList,
     getState: getState,
     source: function () { return state.source; },
-    active: function () { return state.source === "demo" || state.source === "upload"; },
+    active: function () { return state.source === "upload"; },
     meta: function () { return state.meta; },
     analytics: function () { return computeIfNeeded(); },
     rows: function () { computeIfNeeded(); return state.normalized; },
     report: function () { computeIfNeeded(); return datasetReport(state.normalized); },
     applyUpload: applyUpload,
-    applyDemo: applyDemo,
     refreshModel: refreshModel,
     toCSV: toCSV,
     exportPredictions: exportPredictions,
