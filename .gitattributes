@@ -1,0 +1,11 @@
+# Normalize all text files to LF in the repository; Windows checkouts get CRLF.
+* text=auto
+
+# Binary assets that must never be normalized
+*.png   binary
+*.jpg   binary
+*.jpeg  binary
+*.gif   binary
+*.ico   binary
+*.pdf   binary
+*.xlsx  binary
