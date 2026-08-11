@@ -650,12 +650,14 @@ health();
 <script src="ml.js"></script>
 <script src="assistant.js"></script>
 <script>
-/* Deployment wiring: when the dashboard is served from GitHub Pages and the
- * backend runs on Render, set API_BASE to the Render service URL, e.g.
- *   window.API_BASE = "https://smart-pricing-api.onrender.com";
- * When the dashboard is served by the backend itself (same origin), leave "".
+/* Deployment wiring: on GitHub Pages the dashboard calls the Render backend
+ * (smart-dynamic-pricing.onrender.com); when served by the backend itself
+ * (same origin, local uvicorn or Render's static mount) it stays "".
  */
-window.API_BASE = window.API_BASE || "";
+window.API_BASE = window.API_BASE || (
+  window.location && window.location.hostname && /github\.io/.test(window.location.hostname)
+    ? "https://smart-dynamic-pricing.onrender.com" : ""
+);
 window.PricingAnalytics && window.PricingAnalytics.mount();
 window.PricingPredict && window.PricingPredict.mount();
 window.PricingUI && window.PricingUI.boot();

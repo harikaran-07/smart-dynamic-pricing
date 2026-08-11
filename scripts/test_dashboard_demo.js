@@ -64,6 +64,11 @@ const fakeD = {
     "Which model performs best?",
     "Best product to promote",
     "What if inventory drops to 20?",
+    "What is 20% of 500?",
+    "How many products are there?",
+    "What is price elasticity?",
+    "What can you do?",
+    "Thanks a lot!",
   ];
   for (const q of checks) {
     const r = await AICore.answer(q, "dataset", { pid: "P001" }, fakeD);
@@ -71,6 +76,34 @@ const fakeD = {
     assert(ok, `intent "${r.intent}" replies for: "${q}"`);
     if (!ok) console.error(JSON.stringify(r, null, 2).slice(0, 400));
   }
+  const m1 = await AICore.answer("What is 20% of 500?", "dataset", {}, fakeD);
+  assert(m1.intent === "math" && /100/.test(m1.answer), "math: 20% of 500 = 100");
+  const m2 = await AICore.answer("What is the margin if price is 100 and cost is 60?", "dataset", {}, fakeD);
+  assert(m2.intent === "math" && /40/.test(m2.answer), "math: 40% margin computed (" + m2.answer + ")");
+  const m3 = await AICore.answer("Solve (120+45)*3", "dataset", {}, fakeD);
+  assert(m3.intent === "math" && /495/.test(m3.answer), "math: expression (120+45)*3 = 495");
+  const m4 = await AICore.answer("What is 10% off 250?", "dataset", {}, fakeD);
+  assert(m4.intent === "math" && /225/.test(m4.answer), "math: 10% off 250 = 225");
+  const s1 = await AICore.answer("How many products are there?", "dataset", {}, fakeD);
+  assert(s1.intent === "stats" && /3/.test(s1.answer), "stats: 3 products reported");
+  const s2 = await AICore.answer("Which product is the most expensive?", "dataset", {}, fakeD);
+  assert(s2.intent === "stats" && /P001/.test(s2.answer), "stats: most expensive product identified");
+  const s3 = await AICore.answer("What is the average price?", "dataset", {}, fakeD);
+  assert(s3.intent === "stats" && s3.answer.length > 0, "stats: average price computed");
+  const k1 = await AICore.answer("What is price elasticity?", "dataset", {}, fakeD);
+  assert(k1.intent === "knowledge" && /elasticity/i.test(k1.answer), "knowledge: elasticity explained");
+  const k2 = await AICore.answer("Explain dynamic pricing", "dataset", {}, fakeD);
+  assert(k2.intent === "knowledge" && /dynamic pricing/i.test(k2.answer), "knowledge: dynamic pricing explained");
+  const k3 = await AICore.answer("What is profit?", "dataset", {}, fakeD);
+  assert(k3.intent === "knowledge" && /profit/i.test(k3.answer), "knowledge: what-is-profit routed from data intent");
+  const c1 = await AICore.answer("What can you do?", "dataset", {}, fakeD);
+  assert(c1.intent === "capabilities" && c1.answer.length > 60, "capabilities listed");
+  const t1 = await AICore.answer("Thanks!", "dataset", {}, fakeD);
+  assert(t1.intent === "smalltalk", "smalltalk reply for thanks");
+  const w1 = await AICore.answer("Should I offer a 15% discount?", "dataset", { pid: "P001" }, fakeD);
+  assert(w1.intent === "whatif" && /discount/i.test(w1.answer), "whatif: should-I-offer discount scenario");
+  const f1 = await AICore.answer("What is this dashboard?", "dataset", {}, fakeD);
+  assert(f1.intent === "knowledge", "knowledge: dashboard explanation");
   const comp = await AICore.answer("Compare P010 with P015", "dataset", {}, fakeD);
   assert(comp.intent === "compare" && /P010/.test(comp.answer) && /P015/.test(comp.answer), "compare two products");
   const manual = await AICore.answer("Recommend the best price for maximum profit", "manual",
