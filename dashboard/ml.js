@@ -45,14 +45,13 @@
   var STEPS_DEMO = [
     ["Dataset", "Demo dataset generated in-browser (4,380 sales rows)"],
     ["Preprocessing", "Missing values & duplicates analysed in-browser"],
-    ["Model comparison", "Linear Regression vs Seasonal Baseline on the same split"],
-    ["Training", "Best in-browser model trained & evaluated"],
+    ["Training", "Single linear model trained & evaluated in-browser"],
     ["Pricing", "Recommendations from the fitted demand curve"],
   ];
   var STEPS_UPLOAD = [
     ["Dataset", "CSV uploaded, validated & parsed by the backend"],
     ["Preprocessing", "Missing values, duplicates & target selection"],
-    ["Model comparison", "Linear / Random Forest / XGBoost with 5-fold cross-validation"],
+    ["Model comparison", "Linear / Random Forest / Gradient Boosting / XGBoost with 5-fold cross-validation"],
     ["Training", "Best model trained & hold-out metrics computed"],
     ["Pricing", "Price sweep over the fitted demand curve, revenue or profit objective"],
   ];
@@ -533,7 +532,7 @@
     if (stepsEl) {
       if (offline) stepsEl.innerHTML = steps("upload", 2) +
         '<p class="ml-empty" style="margin:10px 2px 0">Backend unreachable \u2014 dataset mirrored in-browser; switch to Demo Mode or restart the backend to run the full ML pipeline.</p>';
-      else stepsEl.innerHTML = steps(isUp ? "upload" : "demo", isUp ? 4 : 4);
+      else stepsEl.innerHTML = steps(isUp ? "upload" : "demo", isUp ? 4 : 3);
     }
     var body = document.getElementById("ml-root");
     if (!body) return;
