@@ -280,7 +280,7 @@
     if (!bk) return;
     var wrap = host.querySelector("#ml-up-data-wrap");
     var portWrap = host.querySelector("#ml-up-portfolio-wrap");
-    fetch("/api/pricing/portfolio?dataset_id=" + encodeURIComponent(bk.datasetId), {
+    fetch((window.API_BASE || "") + "/api/pricing/portfolio?dataset_id=" + encodeURIComponent(bk.datasetId), {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ dataset_id: bk.datasetId, objective: "revenue", top: 10 }),
@@ -319,7 +319,7 @@
         '<p class="ml-empty">Portfolio recommendations unavailable (backend offline).</p>';
     });
 
-    fetch("/api/dataset/sample?dataset_id=" + encodeURIComponent(bk.datasetId) + "&n=500")
+    fetch((window.API_BASE || "") + "/api/dataset/sample?dataset_id=" + encodeURIComponent(bk.datasetId) + "&n=500")
       .then(function (r) { return r.json(); }).then(function (smp) {
         if (!wrap) return;
         var pc = smp.pricing_columns || {};
@@ -429,7 +429,7 @@
     var btn = out.closest(".ml-price").querySelector(".ml-btn");
     btn.disabled = true; btn.textContent = "Optimising\u2026";
     root.PricingUI.spinner(true);
-    fetch("/api/pricing/recommend", {
+    fetch((window.API_BASE || "") + "/api/pricing/recommend", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload),

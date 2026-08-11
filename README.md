@@ -191,10 +191,56 @@ Verify the new pipeline and modules with the Node harnesses:
 node scripts/test_dashboard_demo.js   # demo endpoints + assistant engine
 node scripts/test_engine.js           # CSV/mapping/cleaning/model/analytics/forecast/currency
 node scripts/test_dashboard_boot.js   # DOM-shim boot for charts/engine/analytics/predict/upload
+python scripts/test_backend.py        # dataset quality / pipeline / pricing rules / portfolio
 ```
 
 To publish: push this repo, enable **Settings → Pages** (deploy from the `main` branch,
 root `/`), then open `https://<user>.github.io/smart-dynamic-pricing/`.
+
+## Backend CSV pipeline & Render deployment
+
+The `backend/` FastAPI app powers **Upload Mode** — the real ML pipeline:
+
+- `POST /api/dataset/upload` — CSV upload (≤10 MB), secure parsing, auto column
+  detection, data-quality scoring (0–100 with label + issues list),
+- `POST /api/pipeline/train` — Linear Regression / Random Forest / Gradient Boosting /
+  XGBoost on an 80/20 split with 5-fold cross-validation; honest hold-out metrics,
+  feature importances, actual-vs-predicted and a per-row prediction table,
+- `POST /api/pricing/recommend` — business-rule-constrained optimisation: never below
+  cost (or 50% of current price when no cost column), never more than +20% in one step,
+  per-candidate profit, a High/Medium/Low reliability score and plain-language reasons,
+- `POST /api/pricing/portfolio` — per-product recommendations, largest changes first,
+- `GET /api/dataset/sample` — raw rows for the demand-vs-price and trend charts.
+
+Run it locally (from the `backend/` directory so the imports resolve):
+
+```bash
+pip install -r backend/requirements.txt
+cd backend
+python -m uvicorn main:app --reload
+```
+
+The dashboard and API are then served from the same origin (`http://127.0.0.1:8000`).
+Verify with `python scripts/test_backend.py` (all suites green: 0 failures).
+
+### Deploying to Render
+
+1. Push the repo to GitHub.
+2. On Render: **New → Blueprint** and import the repo (settings are already in
+   `backend/render.yaml`), or create a **Web Service** with root directory `backend`:
+   - build: `pip install -r requirements.txt`
+   - start: `uvicorn main:app --host 0.0.0.0 --port $PORT`
+   - health check path: `/api/health`
+3. When the dashboard is served from GitHub Pages (different origin), point it at the
+   Render service in `dashboard/index.html`:
+
+   ```js
+   window.API_BASE = "https://smart-pricing-api.onrender.com";
+   ```
+
+   Every `/api/...` call is prefixed with `API_BASE` when set — leave it empty for
+   same-origin local use, set it to the Render URL for the Pages deployment. If Render
+   is unreachable, Upload Mode degrades to the in-browser mirror with a clear warning.
 
 ## Tests
 

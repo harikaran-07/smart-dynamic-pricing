@@ -174,6 +174,7 @@ function load(file) {
   // ---- ML upload-mode panels (backend-shaped state + stubbed fetch) ----
   const fetchCalls = [];
   const realFetch = globalThis.fetch;
+  win.API_BASE = "https://api.example.com";
   globalThis.fetch = function (url) {
     fetchCalls.push(String(url));
     const u = String(url);
@@ -239,6 +240,8 @@ function load(file) {
   await new Promise(r => setTimeout(r, 80));
   assert(fetchCalls.some(u => u.indexOf("/api/pricing/portfolio") >= 0), "portfolio endpoint fetched");
   assert(fetchCalls.some(u => u.indexOf("/api/dataset/sample") >= 0), "sample endpoint fetched");
+  assert(fetchCalls.length > 0 && fetchCalls.every(u => u.indexOf("https://api.example.com") === 0),
+    "API calls prefixed with API_BASE (" + fetchCalls.length + " calls)");
   const portWrap = upHost._qs["#ml-up-portfolio-wrap"];
   const portHtml = portWrap.innerHTML;
   assert(portHtml.indexOf("<table") >= 0 && portHtml.indexOf("Reliability") >= 0 && portHtml.indexOf("High") >= 0,

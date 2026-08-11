@@ -305,12 +305,12 @@
   function uploadToBackend(csvText) {
     var fd = new FormData();
     fd.append("file", new Blob(["\uFEFF" + csvText], { type: "text/csv" }), state.fileName.replace(/\.(xlsx|xls)$/i, ".csv"));
-    fetch("/api/dataset/upload", { method: "POST", body: fd })
+    fetch((window.API_BASE || "") + "/api/dataset/upload", { method: "POST", body: fd })
       .then(function (r) { return r.json().then(function (j) { if (!r.ok) throw new Error(j.detail || r.statusText); return j; }); })
       .then(function (profile) {
         setStackLabel("Backend profiling complete \u2014 training models\u2026");
         var target = profile.suggested_target || ((profile.target_candidates && profile.target_candidates[0]) ? profile.target_candidates[0].column : null);
-        return fetch("/api/pipeline/train", {
+        return fetch((window.API_BASE || "") + "/api/pipeline/train", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ dataset_id: profile.dataset_id, target: target }),
