@@ -1,5 +1,5 @@
 /* Boot smoke test: loads charts.js, engine.js, analytics.js, upload.js and
- * assistant.js against a minimal DOM/canvas shim and verifies the dashboard
+ * ml.js against a minimal DOM/canvas shim and verifies the dashboard
  * analytics + upload modules mount without throwing, then that an upload flow
  * (parse -> map -> normalize -> applyUpload) refreshes everything end-to-end.
  */
@@ -148,7 +148,6 @@ function load(file) {
   assert(P.active(), "uploaded dataset active after applyUpload");
   const a = P.analytics();
   assert(a.records === 2 && a.products === 2, "analytics reflects uploaded rows (" + a.records + "/" + a.products + ")");
-  assert(win.PricingData.assistantBundle() && win.PricingData.assistantBundle().products.length === 2, "assistant bundle built from uploaded data");
   assert(/A1/.test(P.insightText(a)), "AI summary mentions uploaded product");
 
   // currency: INR lakh formatting + exchange rate
@@ -247,7 +246,6 @@ function load(file) {
   assert(upHost.innerHTML.indexOf("Portfolio") >= 0, "portfolio section present in upload mode");
   await new Promise(r => setTimeout(r, 80));
   assert(fetchCalls.some(u => u.indexOf("/api/pricing/portfolio") >= 0), "portfolio endpoint fetched");
-  assert(fetchCalls.some(u => u.indexOf("/api/dataset/sample") >= 0), "sample endpoint fetched");
   assert(fetchCalls.length > 0 && fetchCalls.every(u => u.indexOf("https://api.example.com") === 0),
     "API calls prefixed with API_BASE (" + fetchCalls.length + " calls)");
   const portWrap = upHost._qs["#ml-up-portfolio-wrap"];
@@ -255,9 +253,6 @@ function load(file) {
   assert(portHtml.indexOf("<table") >= 0 && portHtml.indexOf("Reliability") >= 0 && portHtml.indexOf("High") >= 0,
     "portfolio table populated from backend data");
   assert(win.__mlCharts && win.__mlCharts["ml-up-portfolio"], "portfolio chart (current vs recommended) drawn");
-  const dataWrap = upHost._qs["#ml-up-data-wrap"];
-  assert(dataWrap.innerHTML.indexOf("Demand vs price") >= 0, "demand-vs-price chart populated from sample data");
-  assert(dataWrap.innerHTML.indexOf("ml-up-trend-prod") >= 0, "trend product selector populated");
 
   bootErr = null;
   try { win.PricingML.renderPrice(); } catch (e) { bootErr = e; }

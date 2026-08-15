@@ -5,8 +5,7 @@
  *   - analytics aggregation (monthly, seasonal, profit, inventory)
  *   - client-side model training metrics (R²/MAE/RMSE/time)
  *   - price optimisation, manual prediction, RL, negotiation
- *   - demand forecast series (actual + prediction + confidence band)
- *   - assistant bundle + insight text + CSV export
+ *   - insight text + CSV export
  */
 "use strict";
 const P = require("../dashboard/engine.js");
@@ -23,7 +22,6 @@ function approx(a, b, tol, msg) {
 // ---- empty state until upload (no built-in demo data) ----------------
 assert(P.source() === "" && !P.active(), "engine starts empty (no demo data)");
 assert(P.analytics() === null, "no analytics before a dataset is uploaded");
-assert(P.assistantBundle() === null, "no assistant bundle without an uploaded dataset");
 assert(P.rows() === null, "no rows before upload");
 assert(P.predictionTable().length === 0, "empty prediction table before upload");
 assert(P.insightText(null) === "", "insightText handles null analytics");
@@ -71,7 +69,6 @@ assert(cleaned.rows[1].cost > 0 && cleaned.rows[1].inventory >= 0, "missing nume
 const upRows = P.normalizeRows(parsed.rows, fullMap).rows;
 P.applyUpload(upRows, { fileName: "t.csv", headers: parsed.headers, rowsParsed: 3 });
 assert(P.active() && P.source() === "upload", "uploaded dataset becomes the active source");
-assert(P.assistantBundle() !== null, "assistant bundle provided for uploaded datasets");
 const a = P.analytics();
 assert(a.records === 3 && a.products === 3, "analytics record/product counts from uploaded data");
 assert(typeof a.model.r2 === "number" && a.model.r2 >= -1 && a.model.r2 <= 1, "model R² in valid range (" + a.model.r2 + ")");
@@ -100,14 +97,6 @@ const sales = P.salesSeries(prod.product_id);
 assert(Array.isArray(sales.units_sold) && sales.units_sold.length, "salesSeries returns daily units");
 const ex = P.explain();
 assert(Array.isArray(ex.top_features) && ex.top_features.length, "explain returns top features");
-
-// ---- demand forecast series ------------------------------------------
-const ds = P.demandSeries(prod.product_id, 1, 7);
-assert(ds.dates.length === 8, "forecast series length = actual + horizon (" + ds.dates.length + ")");
-assert(ds.actual.length === 8 && ds.predicted.length === 8, "forecast series arrays aligned");
-assert(ds.actual.slice(-7).every(v => v == null), "forecast days have no actuals (null)");
-assert(ds.lower.length === 8 && ds.upper.every((u, i) => u >= ds.lower[i]), "confidence band lower ≤ upper");
-assert(ds.avg > 0, "average demand reference computed");
 
 // ---- insight text + export --------------------------------------------
 const txt = P.insightText(a);

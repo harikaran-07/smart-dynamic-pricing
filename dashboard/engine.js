@@ -7,7 +7,7 @@
  *     regression model, R²/MAE/RMSE + training time
  *   - analytics aggregation (demand, revenue, profit, seasonality, inventory)
  *   - price optimisation / manual prediction / RL / negotiation using the
- *     active dataset, and an assistant-compatible data bundle
+ *     active dataset
  *
  * Browser: window.PricingData    Node: module.exports
  */
@@ -905,107 +905,6 @@
     return { top_features: top.length ? top : ["is_weekend", "month", "seasonal_factor", "price", "inventory"] };
   }
 
-  /* Demand forecast for the chart: recent actual + in-sample prediction + N-day
-   * projection with a confidence band. */
-  function demandSeries(pid, actualDays, forecastDays) {
-    actualDays = actualDays || 30; forecastDays = forecastDays || 7;
-    var analytics = computeIfNeeded();
-    if (!analytics) return { dates: [], actual: [], predicted: [], lower: [], upper: [], avg: 0, maxIdx: -1, minIdx: -1 };
-    var model = analytics.model;
-    var prod = analytics.productList.filter(function (p) { return p.product_id === pid; })[0];
-    if (!prod) return { dates: [], actual: [], predicted: [], lower: [], upper: [], avg: 0, maxIdx: -1, minIdx: -1 };
-    var days = Object.keys(prod.daily).sort();
-    var recent = days.slice(-actualDays);
-    var avg = recent.length ? recent.reduce(function (a, d) { return a + prod.daily[d].units; }, 0) / recent.length : 0;
-    var resStd = model ? Math.max(1, model.rmse) : Math.max(2, avg * 0.3);
-
-    var dates = [], actual = [], predicted = [], lower = [], upper = [];
-    var maxIdx = -1, minIdx = -1, i;
-
-    for (i = 0; i < recent.length; i++) {
-      var key = recent[i];
-      var parts = key.split("-");
-      var dte = new Date(+parts[0], +parts[1] - 1, +parts[2]);
-      dates.push(dte.toLocaleDateString("en-IN", { day: "numeric", month: "short" }));
-      var weekendF = prod.daily[key].weekend;
-      var month = prod.daily[key].month;
-      var seas = prod.daily[key].seasonal;
-      var feats = [prod.base_price, prod.competitor_price, prod.cost, prod.inventory, weekendF, month, seas, prod.competitor_price - prod.base_price];
-      var pred = model ? model.predictFeatures(feats) : avg;
-      pred = Math.max(0, pred);
-      var act = prod.daily[key].units;
-      if (act >= (actual[maxIdx >= 0 ? maxIdx : 0] || act)) maxIdx = i;
-      if (act <= (actual[minIdx >= 0 ? minIdx : 0] || act)) minIdx = i;
-      actual.push(act);
-      predicted.push(Math.round(pred * 10) / 10);
-      lower.push(Math.round(Math.max(0, pred - 1.28 * resStd) * 10) / 10);
-      upper.push(Math.round(Math.max(0, pred + 1.28 * resStd) * 10) / 10);
-    }
-
-    /* future days (today+1 .. +forecastDays) — generated from calendar features */
-    var today = new Date(); today.setHours(12, 0, 0, 0);
-    for (i = 1; i <= forecastDays; i++) {
-      var fd = new Date(today.getTime() + i * 86400000);
-      var monthF = fd.getMonth() + 1;
-      var weekendF2 = fd.getDay() === 0 || fd.getDay() === 6 ? 1 : 0;
-      var featsF = [prod.base_price, prod.competitor_price, prod.cost, prod.inventory, weekendF2, monthF, SEASONAL[monthF] || 1, prod.competitor_price - prod.base_price];
-      var pF = Math.max(0, model ? model.predictFeatures(featsF) : avg);
-      var h = Math.sqrt(1 + recent.length + i) * resStd;
-      dates.push(fd.toLocaleDateString("en-IN", { day: "numeric", month: "short" }));
-      actual.push(null);
-      predicted.push(Math.round(pF * 10) / 10);
-      lower.push(Math.round(Math.max(0, pF - 1.28 * h) * 10) / 10);
-      upper.push(Math.round(Math.max(0, pF + 1.28 * h) * 10) / 10);
-    }
-    return { dates: dates, actual: actual, predicted: predicted, lower: lower, upper: upper, avg: Math.round(avg * 10) / 10, maxIdx: maxIdx, minIdx: minIdx };
-  }
-
-  /* ------------------------------------------------------------------ */
-  /* assistant-compatible bundle (only for uploaded datasets)           */
-  /* ------------------------------------------------------------------ */
-  function buildBundle() {
-    var state = getState();
-    var a = state.analytics;
-    var customers = synthCustomers(a.segments_total);
-    var bundle = {
-      currency: CURRENCY, currencyCode: CURRENCY_CODE,
-      products: a.productList.map(function (p) {
-        return { product_id: p.product_id, base_price: p.base_price, cost: p.cost, category: p.category };
-      }),
-      customers: customers,
-      insights: {
-        product_count: a.products,
-        top_profit: a.top_profit, top_revenue: a.top_revenue,
-        best_revenue_category: a.best_revenue_category,
-        best_profit_category: a.best_profit_category,
-        monthly_sales: a.monthly_sales, best_month: +a.best_month,
-        weekday_units: a.weekday_units, weekend_units: a.weekend_units,
-        low_stock: a.low_stock, overstock: a.overstock, inventory: a.inventory,
-        trend_products: a.trend_products, segments: a.segments,
-      },
-      overview: {
-        model_backbone: a.model.backbone,
-        model_metrics: { models: { linear: { r2: a.model.r2, mae: a.model.mae, rmse: a.model.rmse } } },
-        products: a.products, customers: a.segments_total, total_sales_rows: a.records,
-        sales_last_30d: Math.round(a.total_units * (30 / Math.max(1, (a.months * 30 || 365)))), avg_daily_units: Math.round(a.total_units / Math.max(1, a.months * 30) * 10) / 10,
-        avg_price: Math.round(avgOf(a.productList, "base_price") * 100) / 100,
-        segments: a.segments, arima_series_fitted: a.products,
-      },
-      price: function (r) { return optimizePrice(productById(r.product_id), r); },
-      rl: function (r) { return rlPrice(r); },
-      negotiate: function (r) { return negotiate(r); },
-      manual: function (r) { return manualPredict(r); },
-      sales: function (pid) { return salesSeries(pid); },
-      explain: function () { return explain(); },
-    };
-    return bundle;
-  }
-
-  function avgOf(list, key) {
-    if (!list.length) return 0;
-    return list.reduce(function (a, x) { return a + x[key]; }, 0) / list.length;
-  }
-
   function synthCustomers(n) {
     var rnd = mulberry(20260201);
     var labels = [["Premium", "Gold"], ["Loyal", "Silver"], ["Regular", "Bronze"], ["Bargain seeker", "New"]];
@@ -1174,8 +1073,6 @@
     negotiate: negotiate,
     salesSeries: salesSeries,
     explain: explain,
-    demandSeries: demandSeries,
-    buildBundle: buildBundle,
     insightText: insightText,
     productById: productById,
     customerList: customerList,
@@ -1191,7 +1088,6 @@
     toCSV: toCSV,
     exportPredictions: exportPredictions,
     download: download,
-    assistantBundle: function () { return state.source === "upload" ? buildBundle() : null; },
   };
 
   if (typeof module !== "undefined" && module.exports) module.exports = PricingData;

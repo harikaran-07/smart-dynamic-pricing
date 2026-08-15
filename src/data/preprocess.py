@@ -202,7 +202,8 @@ def engineer_sales_features(df: pd.DataFrame) -> pd.DataFrame:
     leakage = _detect_leakage_columns(d, target="sales")
     # Store leakage info for the API/dashboard
     d["_leakage_warning"] = leakage["warning"]
-    d["_leakage_columns"] = [item["column"] for item in leakage["leaked"]]
+    leaked_cols = [item["column"] for item in leakage["leaked"]]
+    d["_leakage_columns"] = (",".join(leaked_cols) if leaked_cols else "none")
     # Do NOT remove the columns from the dataframe; just mark them
     # The API will decide whether to use them as features
 
@@ -254,7 +255,7 @@ def supermarket_analytics(df: pd.DataFrame) -> dict:
     df = df.rename(columns=col_map)
 
     # Make sure we have essential columns
-    essential = ["price", "quantity", "sales", "product_line", "branch", "branch"]
+    essential = ["price", "quantity", "sales", "product_line", "branch"]
     missing = [c for c in essential if c not in df.columns]
     if missing:
         return {
@@ -274,8 +275,9 @@ def supermarket_analytics(df: pd.DataFrame) -> dict:
     ).round(2)
 
     product_revenue["revenue"] = product_revenue["total_sales"]
-    best_selling = product_revenue.nlargest(3, "total_sales")[["product_line", "total_sales", "revenue"]].to_dict("records")
-    worst_selling = product_revenue.nsmallest(3, "total_sales")[["product_line", "total_sales", "revenue"]].to_dict("records")
+    pr = product_revenue.reset_index()
+    best_selling = pr.nlargest(3, "total_sales")[["product_line", "total_sales", "revenue"]].to_dict("records")
+    worst_selling = pr.nsmallest(3, "total_sales")[["product_line", "total_sales", "revenue"]].to_dict("records")
     revenue_by_line = product_revenue["revenue"].to_dict()
 
     # Branch Analysis
@@ -284,8 +286,8 @@ def supermarket_analytics(df: pd.DataFrame) -> dict:
         avg_revenue=("price", "mean"),
     ).round(2)
 
-    best_performing = branch_sales.nlargest(3, "total_sales")[["branch", "total_sales", "avg_revenue"]].to_dict("records")
-    worst_performing = branch_sales.nsmallest(3, "total_sales")[["branch", "total_sales", "avg_revenue"]].to_dict("records")
+    best_performing = branch_sales.reset_index().nlargest(3, "total_sales")[["branch", "total_sales", "avg_revenue"]].to_dict("records")
+    worst_performing = branch_sales.reset_index().nsmallest(3, "total_sales")[["branch", "total_sales", "avg_revenue"]].to_dict("records")
     sales_by_branch = branch_sales["total_sales"].to_dict()
     avg_revenue_by_branch = branch_sales["avg_revenue"].to_dict()
 

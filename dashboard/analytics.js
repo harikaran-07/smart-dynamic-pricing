@@ -1,6 +1,6 @@
 /* analytics.js — Advanced Analytics section for the Smart Dynamic Pricing dashboard.
  *
- * Renders tabs (Overview / Demand / Profit / Seasonal / Inventory & Pricing) using
+ * Renders tabs (Overview / Pricing / Profit / Seasonal / Inventory & Pricing) using
  * the PricingCharts canvas library and the PricingData engine. All charts update
  * automatically when a new dataset is uploaded or the model is refreshed.
  *
@@ -82,7 +82,7 @@
 
   function chartCard(title, sub, id, tall) {
     var card = el(
-      '<div class="px-card' + (id === "px-forecast" ? " wide" : "") + '">' +
+      '<div class="px-card">' +
       '<h4>' + title + '</h4><p class="sub">' + sub + '</p>' +
       '<div class="px-chart' + (tall ? " tall" : "") + '"><canvas></canvas></div></div>');
     return card;
@@ -124,51 +124,6 @@
       '<div class="px-summary"><b>AI summary</b> — ' + P.insightText(a) + '</div></div>');
     wrap.appendChild(card);
 
-    // demand forecast quick card
-    var fc = chartCard("Demand Forecast", "Actual vs model prediction with a confidence interval for " + state.product, "px-forecast");
-    wrap.appendChild(fc);
-    renderForecastChart(fc.querySelector("canvas"), 60, 14);
-
-    return wrap;
-  }
-
-  function renderForecastChart(canvas, actualDays, forecastDays) {
-    var ds = P.demandSeries(state.product, actualDays, forecastDays);
-    var series = [{ name: "Actual", color: "#5b8cff", data: ds.actual, smooth: true, area: true }];
-    var pred = ds.predicted.slice();
-    // predicted only meaningful past the last actual point; blank in-sample portion
-    var nActual = ds.actual.length - forecastDays;
-    for (var i = 0; i < nActual; i++) pred[i] = null;
-    series.push({ name: "Predicted", color: "#34d399", data: pred, smooth: true, dash: true });
-    makeChart(canvas, {
-      xLabels: ds.dates, series: series,
-      bands: [{ name: "Confidence interval", color: "#34d399", lower: ds.lower, upper: ds.upper }],
-      refLines: [{ value: ds.avg, label: "avg " + fmt(ds.avg, 1), color: "#fbbf24" }],
-      yFmt: function (v) { return fmt(v, 0); },
-      title: state.product,
-    });
-  }
-
-  /* ---------------- Demand tab ---------------- */
-  function renderDemand() {
-    var wrap = el('<div class="px-grid"></div>');
-    var fc = chartCard("Demand Forecast — " + state.product,
-      "Actual demand, model prediction and 90% confidence band. Hover for values, scroll to zoom.", "px-forecast", true);
-    fc.classList.add("wide");
-    wrap.appendChild(fc);
-
-    var ds = P.demandSeries(state.product, 30, 7);
-    var actuals = ds.actual.filter(function (v) { return v != null; });
-    var maxV = Math.max.apply(null, actuals), minV = Math.min.apply(null, actuals);
-    var maxD = ds.dates[ds.maxIdx], minD = ds.dates[ds.minIdx];
-    var chips = el('<div class="px-card wide"><h4>Key Demand Signals</h4>' +
-      '<div class="px-chips">' +
-      chip("Highest demand day", maxD + " (" + fmt(maxV) + " units)", "hi") +
-      chip("Lowest demand day", minD + " (" + fmt(minV) + " units)", "lo") +
-      chip("Average demand", fmt(ds.avg, 1) + " units/day", "") +
-      chip("Forecast horizon", "next 7 days", "") +
-      '</div></div>');
-    wrap.appendChild(chips);
     return wrap;
   }
 
@@ -483,8 +438,8 @@
       yFmt: function (v) { return P.fmtMoney(v, 0); },
     });
 
-    /* Demand vs Price */
-    var c2 = chartCard("Demand vs Price", "Expected demand at the recommended price vs the actual price (dual axis)");
+    /* Revenue comparison */
+    var c2 = chartCard("Revenue Comparison", "Expected revenue vs actual revenue at recommended price", "px-revenue");
     wrap.appendChild(c2);
     makeChart(c2.querySelector("canvas"), {
       xLabels: labels,
@@ -570,7 +525,7 @@
     d.innerHTML =
       '<div class="px-empty-box" style="text-align:center">' +
       '<h4>No dataset loaded</h4>' +
-      '<p>Upload a CSV or Excel file with the <b>Upload Dataset</b> button to see analytics, forecasts and pricing insights here.</p>' +
+      '<p>Upload a CSV or Excel file with the <b>Upload Dataset</b> button to see analytics, revenue and pricing insights here.</p>' +
       '<button type="button" class="px-btn px-primary" style="margin:14px auto 0;display:block" onclick="PricingUI&amp;&amp;PricingUI.openModal&amp;&amp;PricingUI.openModal()">&#8593; Upload Dataset</button>' +
       '</div>';
     return d;
@@ -591,7 +546,6 @@
     if (name === "overview") view = renderOverview();
     else if (name === "dataset") view = renderDataset();
     else if (name === "pricing") view = renderPricing();
-    else if (name === "demand") view = renderDemand();
     else if (name === "profit") view = renderProfit();
     else if (name === "seasonal") view = renderSeasonal();
     else if (name === "inventory") view = renderInventory();
@@ -618,7 +572,6 @@
       '<button class="px-tab active" data-tab="overview">Overview</button>' +
       '<button class="px-tab" data-tab="dataset">Dataset</button>' +
       '<button class="px-tab" data-tab="pricing">Pricing</button>' +
-      '<button class="px-tab" data-tab="demand">Demand</button>' +
       '<button class="px-tab" data-tab="profit">Profit</button>' +
       '<button class="px-tab" data-tab="seasonal">Seasonal</button>' +
       '<button class="px-tab" data-tab="inventory">Inventory &amp; Stock</button>' +

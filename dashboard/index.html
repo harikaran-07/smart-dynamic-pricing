@@ -107,7 +107,6 @@
   .bar{height:8px;border-radius:5px;background:#1a2540;overflow:hidden}
   .bar i{display:block;height:100%;background:linear-gradient(90deg,var(--acc),var(--acc-2))}
 
-  .chart-title{display:flex;justify-content:space-between;align-items:center;margin-bottom:10px}
   canvas{width:100%;height:210px;display:block}
 
   footer{margin-top:30px;text-align:center;color:var(--faint);font-size:12px;line-height:1.7}
@@ -279,14 +278,6 @@
         <div id="metrics" class="metrics">Loading…</div>
         <div id="metricbars" class="metricbar"></div>
       </div>
-      <div class="card">
-        <div class="chart-title">
-          <h3>Demand Forecast</h3>
-        </div>
-        <label>Product</label>
-        <select id="chart-product"></select>
-        <div style="margin-top:6px"><canvas id="chart"></canvas></div>
-      </div>
     </section>
   </div>
 
@@ -304,11 +295,8 @@
   <h2 class="sec">Advanced Analytics</h2>
   <div id="px-root"></div>
 
-  <h2 class="sec">AI Pricing Assistant</h2>
-  <div id="assistant-root"></div>
-
   <footer>
-    Smart Dynamic Pricing System — ML-driven price optimization with demand forecasting,
+    Smart Dynamic Pricing System — ML-driven price optimization with
     customer segmentation, reinforcement learning &amp; an AI negotiation agent.
   </footer>
 </div>
@@ -425,63 +413,13 @@ function statCard(k, v, s){
   return d;
 }
 
-let baseChart = null;
-function drawChart(dates, units){
-  const cv = $("chart");
-  if (baseChart){ try{ baseChart.destroy(); }catch(_){} baseChart = null; }
-  if (window.PricingCharts && window.PricingCharts.Chart){
-    baseChart = new window.PricingCharts.Chart(cv, {
-      xLabels: dates.map(d => String(d).slice(5,10)),
-      series:[{ name:"Units sold", color:"#5b8cff", data:units, smooth:true, area:true }],
-      yFmt: v => fmt(v,0),
-      title: $("chart-product").value,
-    });
-    return;
-  }
-  cv.width = 620; cv.height = 220;
-  const ctx = cv.getContext("2d");
-  ctx.clearRect(0,0,cv.width,cv.height);
-  const padL=34, padR=10, padT=14, padB=24;
-  const w = cv.width-padL-padR, h = cv.height-padT-padB;
-  const max = Math.max(...units, 1);
-  const xs = (i) => padL + w*i/(units.length-1||1);
-  const ys = (u) => padT + h - h*u/max;
-
-  ctx.strokeStyle = "#223052"; ctx.lineWidth = 1;
-  ctx.font = "10px Inter, sans-serif"; ctx.fillStyle = "#64748a";
-  for (let i=0;i<=4;i++){
-    const y = padT + h - h*i/4;
-    ctx.beginPath(); ctx.moveTo(padL,y); ctx.lineTo(padL+w,y); ctx.stroke();
-    ctx.fillText(Math.round(max*i/4), 4, y+3);
-  }
-  ctx.beginPath(); ctx.moveTo(xs(0), ys(units[0]));
-  units.forEach((u,i)=>ctx.lineTo(xs(i), ys(u)));
-  ctx.lineTo(xs(units.length-1), padT+h); ctx.lineTo(xs(0), padT+h); ctx.closePath();
-  const grad = ctx.createLinearGradient(0,padT,0,padT+h);
-  grad.addColorStop(0,"rgba(91,140,255,.45)"); grad.addColorStop(1,"rgba(91,140,255,0)");
-  ctx.fillStyle = grad; ctx.fill();
-  ctx.beginPath(); ctx.strokeStyle = "#5b8cff"; ctx.lineWidth = 2.4; ctx.lineJoin="round";
-  units.forEach((u,i)=> i===0?ctx.moveTo(xs(i),ys(u)):ctx.lineTo(xs(i),ys(u)));
-  ctx.stroke();
-  ctx.fillStyle = "#5b8cff";
-  units.forEach((u,i)=>{ ctx.beginPath(); ctx.arc(xs(i),ys(u),2.6,0,7); ctx.fill(); });
-  ctx.fillStyle = "#5f6a85"; ctx.font = "10px Inter, sans-serif";
-  if (dates.length) ctx.fillText(String(dates[0]).slice(5,10), padL, cv.height-6);
-  if (dates.length>1) ctx.textAlign="right", ctx.fillText(String(dates[dates.length-1]).slice(5,10), padL+w, cv.height-6);
-}
-
-async function loadChart(){
-  const s = await dataApi("/api/sales/" + $("chart-product").value);
-  drawChart(s.dates, s.units_sold);
-}
-
 window.PricingDashboard = {
   refreshAll: async function(){
     try{
       const [o, prods, custs] = await Promise.all([
         dataApi("/api/overview"), dataApi("/api/products"), dataApi("/api/customers")]);
       const products = prods.slice(0,20);
-      ["prices-product","neg-product","rl-product","chart-product"]
+      ["prices-product","neg-product","rl-product"]
         .forEach(id => fill(id, products));
       fill("neg-customer", custs.slice(0,20));
 
@@ -510,9 +448,6 @@ window.PricingDashboard = {
           mb.appendChild(bar(k, Math.round(r2*100), `R² ${fmt(r2)}`));
         });
       }
-
-      $("chart-product").onchange = loadChart;
-      await loadChart();
     }catch(e){
       $("health").textContent = "No dataset loaded";
       $("health").className = "pill dim";
@@ -541,7 +476,7 @@ function refreshEverything2(){
   if (window.PricingDashboard) window.PricingDashboard.refreshAll();
   if (window.PricingAnalytics) window.PricingAnalytics.render();
   if (window.PricingPredict) window.PricingPredict.render();
-  if (window.PricingAssistant && window.PricingAssistant.reload) window.PricingAssistant.reload();
+
   if (window.syncDatasetSections) window.syncDatasetSections();
   if (window.updateHealthPill) window.updateHealthPill();
 }
@@ -563,7 +498,7 @@ function applyCurrency(){
   if (window.PricingAnalytics) window.PricingAnalytics.render();
   if (window.PricingPredict) window.PricingPredict.render();
   if (window.PricingDashboard) window.PricingDashboard.refreshAll();
-  if (window.PricingAssistant && window.PricingAssistant.reload) window.PricingAssistant.reload();
+
   if (window.PricingUI) window.PricingUI.toast("Currency updated",
     code === "USD" ? "Showing prices in US$." : "Showing prices in " + code + " (custom rate " + r + " per US$).", "ok");
 }
@@ -648,7 +583,6 @@ health();
 <script src="predict.js"></script>
 <script src="upload.js"></script>
 <script src="ml.js"></script>
-<script src="assistant.js"></script>
 <script>
 /* Deployment wiring: on GitHub Pages the dashboard calls the Render backend
  * (smart-dynamic-pricing.onrender.com); when served by the backend itself

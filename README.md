@@ -14,9 +14,6 @@ customer segmentation and an AI negotiation agent.
 - **AI Negotiation Agent** — simulates a customer-agent bargain and returns a personalized discount
   based on loyalty, purchase history, demand pressure and a "churn risk" willingness-to-buy.
 - **REST API (FastAPI)** with live price recommendation and negotiation endpoints.
-- **AI Pricing Assistant** — an in-dashboard chat (Dataset + Manual modes) that answers
-  pricing, demand, profit, segmentation, seasonal, inventory, RL and ML questions in a
-  structured Answer / Reasoning / Business Impact / Recommended Action / Confidence format.
 - **Prediction Center** — a dedicated two-mode panel: **Dataset Mode** (upload/analyze a
   dataset, review data quality & model metrics, and browse a per-product prediction table
   with CSV export) and **Manual Mode** (enter price, demand, sales, inventory, competitor,
@@ -76,17 +73,15 @@ segmentation.py    # K-Means + loyalty scoring
 scripts/
   run.ps1              # start the API on Windows
   smoke_test.py        # quick API verification
-  test_dashboard_demo.js  # Node harness for demo endpoints + assistant engine
   test_engine.js          # Node harness for the upload/analytics/model pipeline
   test_dashboard_boot.js  # Node DOM-shim boot test for charts/engine/analytics/upload
 dashboard/
   index.html           # monitor dashboard (served by the API)
   charts.js            # professional canvas charting (tooltips, zoom, bands, markers)
   engine.js            # data pipeline: CSV/Excel, mapping, cleaning, client ML, analytics, currency
-  analytics.js         # Advanced Analytics (Overview / Dataset / Pricing / Demand / Profit / Seasonal / Inventory)
+  analytics.js         # Advanced Analytics (Overview / Dataset / Pricing / Profit / Seasonal / Inventory)
   predict.js           # Prediction Center: Dataset + Manual modes, KPI cards, recommendation panel
   upload.js            # Data Source control + upload workflow + toasts/overlay
-  assistant.js         # AI Pricing Assistant engine + UI
 ```
 
 ## API examples
@@ -112,11 +107,6 @@ curl -X POST http://127.0.0.1:8000/api/negotiate \
 curl -X POST http://127.0.0.1:8000/api/rl-price \
   -H "Content-Type: application/json" \
   -d '{"product_id":"P001","inventory":43,"demand_pressure":0.6}'
-
-# assistant data endpoints
-curl http://127.0.0.1:8000/api/products/detail
-curl http://127.0.0.1:8000/api/customers/detail
-curl http://127.0.0.1:8000/api/insights
 
 # manual-mode prediction (no dataset product needed)
 curl -X POST http://127.0.0.1:8000/api/manual \
@@ -146,8 +136,8 @@ The header **Data Source** control opens an **Upload Dataset** flow (CSV / Excel
 - the pipeline then **cleans missing values, scales numeric features and trains a
   client-side demand model**, reporting dataset size, features, products, records,
   missing values, R²/MAE/RMSE and training time plus an AI-generated summary,
-- every prediction, chart and assistant answer switches to the uploaded dataset until
-  the dashboard is reset.
+- every prediction and chart switches to the uploaded dataset until the dashboard
+  is reset.
 
 ### Prediction Center (Dataset & Manual modes)
 
@@ -185,7 +175,6 @@ the conversion (default 1 USD = 83 INR) can be adjusted.
 Verify the new pipeline and modules with the Node harnesses:
 
 ```bash
-node scripts/test_dashboard_demo.js   # assistant engine (AICore + chat bootstrap)
 node scripts/test_engine.js           # CSV/mapping/cleaning/model/analytics/forecast/currency
 node scripts/test_dashboard_boot.js   # DOM-shim boot for charts/engine/analytics/predict/upload
 python scripts/test_backend.py        # dataset quality / pipeline / pricing rules / portfolio

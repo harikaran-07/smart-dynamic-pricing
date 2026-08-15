@@ -354,7 +354,6 @@
   function refreshEverything(a) {
     if (root.PricingAnalytics) { root.PricingAnalytics.render(); }
     if (root.PricingPredict) { root.PricingPredict.render(); }
-    if (root.PricingAssistant && root.PricingAssistant.reload) { root.PricingAssistant.reload(); }
     if (root.PricingDashboard && root.PricingDashboard.refreshAll) { root.PricingDashboard.refreshAll(); }
     if (root.PricingML) { root.PricingML.render(); root.PricingML.renderPrice(); }
     if (root.syncDatasetSections) root.syncDatasetSections();

@@ -175,8 +175,7 @@
       '<div class="ml-chartbox"><canvas id="ml-up-avp"></canvas></div></div>' +
       '<div class="ml-tbl"><h4>Per-row predictions (first ' + tr.predictions_table.length + " of test set, sampled)</h4>" + predictionsTable(tr) + "</div>" +
       '<div class="ml-tbl" id="ml-up-portfolio-wrap"><h4>Portfolio: top products needing price changes</h4>' +
-      '<div class="ml-empty">Loading recommendations\u2026</div></div>' +
-      '<div class="ml-grid2" id="ml-up-data-wrap"></div>';
+      '<div class="ml-empty">Loading recommendations\u2026</div></div>';
     rootEl.innerHTML = "";
     rootEl.appendChild(host);
     uploadCompareChart(tr.models);
@@ -185,12 +184,10 @@
     loadUploadExtras(host);
   }
 
-  /* Charts that need raw rows: demand-vs-price curve, history trend and the
-   * portfolio (current vs recommended). All data comes from the backend. */
+  /* Portfolio chart (current vs recommended) — data comes from the backend. */
   function loadUploadExtras(host) {
     var bk = backend();
     if (!bk) return;
-    var wrap = host.querySelector("#ml-up-data-wrap");
     var portWrap = host.querySelector("#ml-up-portfolio-wrap");
     fetch((window.API_BASE || "") + "/api/pricing/portfolio?dataset_id=" + encodeURIComponent(bk.datasetId), {
       method: "POST",
@@ -230,65 +227,6 @@
       if (portWrap) portWrap.innerHTML = "<h4>Portfolio</h4>" +
         '<p class="ml-empty">Portfolio recommendations unavailable (backend offline).</p>';
     });
-
-    fetch((window.API_BASE || "") + "/api/dataset/sample?dataset_id=" + encodeURIComponent(bk.datasetId) + "&n=500")
-      .then(function (r) { return r.json(); }).then(function (smp) {
-        if (!wrap) return;
-        var pc = smp.pricing_columns || {};
-        var priceKey = pc.price, unitsKey = pc.units, groupKey = pc.group;
-        if (priceKey && unitsKey) {
-          var buckets = {};
-          smp.rows.forEach(function (r) {
-            var p = +r[priceKey], u = +r[unitsKey];
-            if (!isFinite(p) || !isFinite(u) || p <= 0 || u < 0) return;
-            var key = Math.round(p);
-            if (!buckets[key]) buckets[key] = { sum: 0, n: 0 };
-            buckets[key].sum += u; buckets[key].n += 1;
-          });
-          var pts = Object.keys(buckets).map(function (k) { return { p: +k, d: buckets[k].sum / buckets[k].n }; })
-            .sort(function (a, b) { return a.p - b.p; }).slice(0, 40);
-          wrap.innerHTML += '<div class="ml-col"><h4>Demand vs price (observed data)</h4>' +
-            '<div class="ml-chartbox"><canvas id="ml-up-dvp"></canvas></div></div>';
-          draw("ml-up-dvp", {
-            xLabels: pts.map(function (t) { return t.p; }),
-            showValues: "maxmin",
-            series: [{ name: "Avg units at price", color: "#5b8cff", data: pts.map(function (t) { return t.d; }), smooth: true, area: true }],
-            yFmt: function (v) { return fmt(v, 1); },
-            title: "Average demand per rounded price (from your data)",
-          });
-        }
-        if (groupKey) {
-          var gv = smp.rows.map(function (r) { return r[groupKey]; }).filter(function (v) { return v != null; })[0];
-          var groups = [];
-          smp.rows.forEach(function (r) { if (r[groupKey] != null && groups.indexOf(String(r[groupKey])) < 0) groups.push(String(r[groupKey])); });
-          gv = groups[0] || gv;
-          wrap.innerHTML += '<div class="ml-col"><h4>Price &amp; demand history</h4>' +
-            '<label style="margin:4px 0">Product</label><select id="ml-up-trend-prod"></select>' +
-            '<div class="ml-chartbox"><canvas id="ml-up-trend"></canvas></div></div>';
-          var sel = host.querySelector("#ml-up-trend-prod");
-          groups.slice(0, 40).forEach(function (g) { sel.add(new Option(String(g), String(g))); });
-          var trend = function () {
-            var rows = smp.rows.filter(function (r) { return String(r[groupKey]) === sel.value; });
-            if (!rows.length || !priceKey || !unitsKey) return;
-            var maxPts = Math.min(rows.length, 90);
-            var sub = rows.slice(-maxPts);
-            draw("ml-up-trend", {
-              xLabels: sub.map(function (r, i) { return i; }),
-              showValues: "maxmin",
-              series: [
-                { name: "Price", color: "#8b5cf6", data: sub.map(function (r) { return +r[priceKey]; }), smooth: true },
-                { name: "Demand", color: "#5b8cff", data: sub.map(function (r) { return +r[unitsKey]; }), smooth: true, area: true },
-              ],
-              yFmt: function (v) { return fmt(v, 1); },
-              title: "Price & demand over time (last " + maxPts + " rows)",
-            });
-          };
-          sel.onchange = trend;
-          trend();
-        }
-      }).catch(function () {
-        if (wrap) wrap.innerHTML = '<div class="ml-col"><p class="ml-empty">Trend charts unavailable (backend offline).</p></div>';
-      });
   }
 
   /* ------------------------------------------------------------------ */

@@ -72,7 +72,7 @@ function installURLShim() {
 }
 
 async function main() {
-  const files = ["charts.js", "engine.js", "analytics.js", "predict.js", "upload.js", "ml.js", "assistant.js"];
+  const files = ["charts.js", "engine.js", "analytics.js", "predict.js", "upload.js", "ml.js"];
   let ok = true;
   for (const f of files) {
     try {
@@ -97,7 +97,6 @@ async function main() {
   assert(rep.size === 0, "empty report before upload (size " + rep.size + ")");
   const tab = win.PricingData.predictionTable();
   assert(tab.length === 0, "empty prediction table before upload");
-  assert(win.PricingData.assistantBundle() === null, "no assistant bundle on live Pages without upload");
   win.PricingData.setCurrency("GBP", 0.79);
   assert(win.PricingData.getCurrency().symbol === "£", "GBP currency works live");
   win.PricingData.setCurrency("USD");
