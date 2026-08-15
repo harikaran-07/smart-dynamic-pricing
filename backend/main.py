@@ -78,7 +78,6 @@ def health():
         "service": "smart-pricing-api",
         "ml": {
             "linear": True,
-            "random_forest": True,
             "xgboost": pl.HAS_XGB,
         },
         "xgboost_available": pl.HAS_XGB,

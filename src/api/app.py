@@ -41,7 +41,7 @@ except FileNotFoundError:
     DEMAND_MODELS, SEG, NEG_AGENT, CUSTOMERS, PRODUCTS = None, None, None, None, None
     CAN_SERVE = False
 
-_PREF_BACKBONE = "xgboost" if DEMAND_MODELS and "xgboost" in DEMAND_MODELS else "random_forest"
+_PREF_BACKBONE = "xgboost" if DEMAND_MODELS and "xgboost" in DEMAND_MODELS else "linear"
 
 # RL price agent trains fast at boot; independent of the demand-model artifacts.
 RL_AGENT = rl_agent.train_agent()
