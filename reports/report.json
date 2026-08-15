@@ -2,78 +2,78 @@
   "winner": "xgboost",
   "metrics": {
     "linear": {
-      "mae": 6.439994112650221,
-      "rmse": 8.411849856530052,
-      "r2": 0.5295640811673354
+      "mae": 2.596327987906111,
+      "rmse": 3.652711629364739,
+      "r2": 0.8723563877488887
     },
     "random_forest": {
-      "mae": 4.811031642223119,
-      "rmse": 6.341875488215389,
-      "r2": 0.7326052529629303
+      "mae": 1.8215356052625447,
+      "rmse": 2.5014490868750627,
+      "r2": 0.9401379414725765
     },
     "xgboost": {
-      "mae": 4.215271557284259,
-      "rmse": 5.584193472230966,
-      "r2": 0.7926813547429696
+      "mae": 1.3994105296345998,
+      "rmse": 1.9238936089153666,
+      "r2": 0.9645896340313207
     }
   },
   "feature_importance": {
-    "price": 0.00719,
-    "competitor_price": 0.01006,
-    "price_vs_competitor": 0.00952,
-    "price_ratio_to_base": 0.03927,
-    "price_over_cat": 0.01211,
-    "inventory": 0.06056,
-    "is_weekend": 0.51731,
-    "month": 0.01018,
-    "year_sin": 0.01259,
-    "year_cos": 0.01299,
-    "seasonal_factor": 0.08127,
-    "weather_factor": 0.04552,
-    "units_lag1": 0.02537,
-    "units_lag7": 0.01874,
-    "units_roll7": 0.13733
+    "price": 0.0042,
+    "competitor_price": 0.00426,
+    "price_vs_competitor": 0.00466,
+    "price_ratio_to_base": 0.0254,
+    "price_over_cat": 0.00628,
+    "inventory": 0.00712,
+    "is_weekend": 0.1915,
+    "month": 0.00619,
+    "year_sin": 0.00718,
+    "year_cos": 0.00802,
+    "seasonal_factor": 0.02185,
+    "weather_factor": 0.01428,
+    "units_lag1": 0.21752,
+    "units_lag7": 0.06179,
+    "units_roll7": 0.41976
   },
   "top_features": [
     {
-      "feature": "is_weekend",
-      "importance": 0.51731
-    },
-    {
       "feature": "units_roll7",
-      "importance": 0.13733
-    },
-    {
-      "feature": "seasonal_factor",
-      "importance": 0.08127
-    },
-    {
-      "feature": "inventory",
-      "importance": 0.06056
-    },
-    {
-      "feature": "weather_factor",
-      "importance": 0.04552
-    },
-    {
-      "feature": "price_ratio_to_base",
-      "importance": 0.03927
+      "importance": 0.41976
     },
     {
       "feature": "units_lag1",
-      "importance": 0.02537
+      "importance": 0.21752
+    },
+    {
+      "feature": "is_weekend",
+      "importance": 0.1915
     },
     {
       "feature": "units_lag7",
-      "importance": 0.01874
+      "importance": 0.06179
+    },
+    {
+      "feature": "price_ratio_to_base",
+      "importance": 0.0254
+    },
+    {
+      "feature": "seasonal_factor",
+      "importance": 0.02185
+    },
+    {
+      "feature": "weather_factor",
+      "importance": 0.01428
     },
     {
       "feature": "year_cos",
-      "importance": 0.01299
+      "importance": 0.00802
     },
     {
       "feature": "year_sin",
-      "importance": 0.01259
+      "importance": 0.00718
+    },
+    {
+      "feature": "inventory",
+      "importance": 0.00712
     }
   ],
   "n_features": 15
