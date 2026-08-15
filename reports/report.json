@@ -17,6 +17,11 @@
       "r2": 0.9645896340313207
     }
   },
+  "metric_labels": {
+    "mae": "MAE",
+    "rmse": "RMSE",
+    "r2": "R\u00b2 Score"
+  },
   "feature_importance": {
     "price": 0.0042,
     "competitor_price": 0.00426,

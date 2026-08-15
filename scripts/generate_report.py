@@ -107,9 +107,17 @@ def main() -> None:
     fig.savefig(REPORTS_DIR / "model_comparison.png", dpi=120)
     plt.close(fig)
 
+    # Human-readable labels for display
+    METRIC_LABELS = {
+        "mae": "MAE",
+        "rmse": "RMSE",
+        "r2": "R² Score",
+    }
+
     report = {
         "winner": winner,
         "metrics": metrics,
+        "metric_labels": METRIC_LABELS,  # for dashboard display
         "feature_importance": {
             FEATURES[i]: round(float(importance[i]), 5) for i in range(len(FEATURES))
         },
@@ -122,7 +130,7 @@ def main() -> None:
     REPORT_JSON.write_text(json.dumps(report, indent=2, default=str))
     print(f"Report written to {REPORTS_DIR}")
     print("Winner:", winner, "| RMSE:", round(metrics[winner]["rmse"], 4),
-          "| R2:", round(metrics[winner]["r2"], 4))
+          "| R² Score:", round(metrics[winner]["r2"], 4))
     print("Top 5 features:", [t["feature"] for t in report["top_features"][:5]])
 
 
