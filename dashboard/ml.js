@@ -43,7 +43,7 @@
     ["Preprocessing", "Missing values, duplicates & target selection"],
     ["Model comparison", "Linear / Random Forest / Gradient Boosting / XGBoost with 5-fold cross-validation"],
     ["Training", "Best model trained & hold-out metrics computed"],
-    ["Pricing", "Price sweep over the fitted demand curve, revenue or profit objective"],
+    ["Pricing", "Price sweep over the fitted curve, revenue or profit objective"],
   ];
 
   /* Render the pipeline stepper. doneCount = number of completed steps. */
@@ -197,18 +197,18 @@
       if (portWrap) {
         if (!port.items || !port.items.length) {
           portWrap.innerHTML = "<h4>Portfolio: top products needing price changes</h4>" +
-            '<p class="ml-empty">' + esc(port.note || "No products with a usable demand curve.") + "</p>";
+            '<p class="ml-empty">' + esc(port.note || "No products with a usable fitted curve.") + "</p>";
           return;
         }
         var labels = port.items.map(function (it) { return it.product; });
         portWrap.innerHTML = "<h4>Portfolio: top products needing price changes</h4>" +
           '<div class="ml-chartbox"><canvas id="ml-up-portfolio"></canvas></div>' +
           '<table class="ml-table" style="margin-top:10px"><thead><tr><th>Product</th><th>Current</th><th>Recommended</th>' +
-          "<th>Change</th><th>Est. demand</th><th>Est. revenue</th><th>Est. profit</th><th>Reliability</th></tr></thead><tbody>" +
+          "<th>Change</th><th>Est. revenue</th><th>Est. profit</th><th>Reliability</th></tr></thead><tbody>" +
           port.items.map(function (it) {
             return "<tr><td>" + esc(it.product) + "</td><td>" + money(it.current_price) + "</td><td><b>" +
               money(it.recommended_price) + "</b></td><td>" + fmt(it.change_pct, 1) + "%</td><td>" +
-              fmt(it.expected_demand, 1) + "</td><td>" + money(it.expected_revenue) + "</td><td>" +
+              money(it.expected_revenue) + "</td><td>" +
               (it.expected_profit != null ? money(it.expected_profit) : "\u2014") + "</td><td>" +
               esc(it.reliability) + "</td></tr>";
           }).join("") + "</tbody></table>";
@@ -260,7 +260,6 @@
       rc.head("Backend recommendation", "objective \u00B7 " + res.optimal.objective + " \u00B7 " + res.currency);
       rc.row("Current price", money(res.current.price));
       rc.row("Recommended price", money(res.optimal.price), "hero");
-      rc.row("Estimated demand", fmt(res.optimal.estimated_demand) + " units");
       rc.row("Estimated revenue", money(res.optimal.estimated_revenue));
       if (res.optimal.estimated_profit != null) rc.row("Estimated profit", money(res.optimal.estimated_profit));
       rc.row("Change", fmt(res.optimal.change_pct, 1) + "% \u00B7 " + fmt(res.demand_model.elasticity, 2) + " elasticity");
