@@ -3,6 +3,9 @@ __pycache__/
 *.pyc
 *.egg-info/
 data/raw/
+data/kaggle/
+data/kaggle2/
+data/kaggle3/
 /models/
 notebooks/
 *.csv
@@ -11,3 +14,4 @@ notebooks/
 !reports/report.json
 .env
 .pytest_cache/
+.freebuff/
