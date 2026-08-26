@@ -104,7 +104,7 @@
   .metricbar{margin-top:12px}
   .metricbar .mb{display:flex;justify-content:space-between;font-size:12px;margin:10px 0 4px}
   .metricbar .mb b{color:var(--txt);font-weight:650}
-  .bar{height:8px;border-radius:5px;background:#1a2540;overflow:hidden}
+  .bar{height:8px;border-radius:var(--rad);background:#1a2540;overflow:hidden}
   .bar i{display:block;height:100%;background:linear-gradient(90deg,var(--acc),var(--acc-2))}
 
   canvas{width:100%;height:210px;display:block}
@@ -134,7 +134,7 @@
     background:#fff;animation:mlpulse 1.1s ease-in-out infinite}
   @keyframes mlpulse{50%{opacity:.25}}
   .ml-step-txt b{display:block;font-size:12.5px}
-  .ml-step-txt i{display:block;font-size:11px;color:var(--faint);font-style:normal;margin-top:2px;line-height:1.45}
+  .ml-step-txt i{display:block;font-size:12px;color:var(--faint);font-style:normal;margin-top:2px;line-height:1.45}
   .ml-body{margin-top:14px}
   .ml-host{display:flex;flex-direction:column;gap:16px}
   .ml-model-summary{background:#0c1220;border:1px solid var(--line);border-radius:12px;padding:6px 16px}
@@ -178,7 +178,7 @@
   .ml-q-body h4{margin:0 0 6px;font-size:13.5px}
   .ml-q-body p{margin:2px 0;font-size:12px;color:var(--mut)}
   .ml-q-body ul{margin:6px 0 0;padding-left:18px;font-size:12px;color:var(--warn);line-height:1.6}
-  .rel-badge{display:inline-block;padding:3px 10px;border-radius:20px;font-size:11px;font-weight:700;
+  .rel-badge{display:inline-block;padding:3px 10px;border-radius:20px;font-size:12px;font-weight:700;
     letter-spacing:.5px}
   .rel-high{background:rgba(52,211,153,.15);color:var(--ok)}
   .rel-medium{background:rgba(251,191,36,.15);color:var(--warn)}
@@ -187,6 +187,33 @@
   .ml-rules h5{margin:0 0 6px;font-size:11.5px;color:var(--acc);text-transform:uppercase;letter-spacing:.6px}
   .ml-rules ul{margin:0;padding-left:18px}
   .ml-rules li{font-size:12px;color:var(--mut);line-height:1.6;margin:2px 0}
+
+/* Consolidated button styles - reduced from 10+ to 5 core styles */
+.button-primary {
+  width: 100%; padding: 12px 16px; border: 0; border-radius: 10px;
+  background: linear-gradient(135deg, var(--acc), var(--acc-2)); color: white;
+  font-weight: 700; font-size: 13.5px; cursor: pointer; box-shadow: 0 8px 20px rgba(91,140,255,.3);
+  transition: .15s; }
+.button-primary:hover { filter: brightness(1.08); transform: translateY(-1px); }
+
+.button-secondary {
+  width: auto; padding: 8px 14px; border: 0; border-radius: 9px;
+  background: none; color: var(--mut); font-weight: 600; font-size: 12.5px;
+  box-shadow: none; }
+
+.pill-badge {
+  display: inline-flex; align-items: center; gap: 7px; padding: 7px 14px;
+  border-radius: 999px; font-size: 12.5px; font-weight: 600; border: 1px solid var(--line);
+  background: var(--card); }
+
+.small-badge {
+  display: inline-block; padding: 2px 9px; border-radius: 999px; font-size: 11px;
+  font-weight: 700; background: rgba(52,211,153,.14); color: var(--ok);
+  border: 1px solid rgba(52,211,153,.3); }
+
+.mode-select {
+  width: auto; padding: 8px 14px; border: 0; border-radius: 9px;
+  background: none; color: var(--mut); box-shadow: none; border: 0; font-size: 12.5px; }
 </style>
 </head>
 <body>
