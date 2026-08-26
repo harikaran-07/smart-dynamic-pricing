@@ -1,4 +1,4 @@
-name: Deploy dashboard to GitHub Pages
+name: Deploy Dashboard to GitHub Pages
 
 on:
   push:
@@ -11,8 +11,8 @@ permissions:
   id-token: write
 
 concurrency:
-  group: pages
-  cancel-in-progress: true
+  group: "pages"
+  cancel-in-progress: false
 
 jobs:
   deploy:
@@ -27,10 +27,10 @@ jobs:
       - name: Setup Pages
         uses: actions/configure-pages@v5
 
-      - name: Upload Pages artifact
+      - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
         with:
-          path: ./dashboard
+          path: dashboard
 
       - name: Deploy to GitHub Pages
         id: deployment
