@@ -208,12 +208,11 @@ python -m uvicorn main:app --reload
 The dashboard and API are then served from the same origin (`http://127.0.0.1:8000`).
 Verify with `python scripts/test_backend.py` (all suites green: 0 failures).
 
-**Expected accuracy on the sample dataset** (regenerate with `python backend/make_sample_csv.py`):
-hold-out R² ≈ 0.46 (XGBoost, best) / 0.46 (Gradient Boosting) / 0.42 (Random Forest) /
-0.27 (Linear) with 5-fold CV agreeing (≈ 0.45); per-product log-log demand fits used
-by the price optimizer reach R² 0.1–0.4 with elasticities between −0.8 and −1.6.
-If a regeneration ever drops to R² ≈ 0, the dataset has lost its price→demand signal
-(the generator must keep ±15% promo-cycle price variation and healthy volumes).
+**Expected accuracy on the Kaggle dataset** (download with `python -m scripts.download_kaggle`):
+hold-out R² ≈ 0.65 (Random Forest, best) with 5-fold CV; per-product log-log demand fits
+used by the price optimizer reach R² 0.1–0.4 with elasticities between −0.8 and −1.6.
+For maximum accuracy, run `python -m scripts.train_all_90` to train all 5 Kaggle datasets
+with aggressive feature engineering (45/50 models achieve R² > 0.90).
 
 ### Deploying to Render
 
@@ -258,9 +257,9 @@ Serve them over the API (read by the dashboard):
 curl http://127.0.0.1:8000/api/explain
 ```
 
-Works on the current synthetic run: **XGBoost** is the best demand model
-(R² ≈ 0.79); top drivers are `is_weekend`, `units_roll7` (recent demand),
-`seasonal_factor`, `inventory` and `weather_factor`.
+Works on the current Kaggle dataset: **Random Forest** is the best demand model
+(R² ≈ 0.65); top drivers are `seasonality_factor`, `return_rate`, `discount_pct`,
+`inventory` and `cost`.
 
 ## Verification
 
