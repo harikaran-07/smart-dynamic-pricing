@@ -23,13 +23,26 @@ FEATURES = [
 ]
 
 
+from sklearn.ensemble import RandomForestRegressor, GradientBoostingRegressor
+
+
 def make_pipelines() -> dict[str, Pipeline]:
     lr = Pipeline([("scaler", StandardScaler()), ("reg", LinearRegression())])
-    models: dict[str, Pipeline] = {"linear": lr}
+    rf = Pipeline([
+        ("reg", RandomForestRegressor(n_estimators=100, max_depth=10, random_state=42, n_jobs=-1))
+    ])
+    gb = Pipeline([
+        ("reg", GradientBoostingRegressor(n_estimators=120, learning_rate=0.08, max_depth=5, random_state=42))
+    ])
+    models: dict[str, Pipeline] = {
+        "linear": lr,
+        "random_forest": rf,
+        "gradient_boosting": gb,
+    }
     if XGB_AVAILABLE:
         xgb = Pipeline([
             ("reg", XGBRegressor(n_estimators=200, learning_rate=0.08, max_depth=6,
-                                 subsample=0.8, colsample_bytree=0.8,
+                                 subsample=0.85, colsample_bytree=0.8,
                                  random_state=42, n_jobs=-1)),
         ])
         models["xgboost"] = xgb

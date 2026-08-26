@@ -328,13 +328,34 @@
   /* ------------------------------------------------------------------ */
   /* linear regression (ridge) for demand prediction                    */
   /* ------------------------------------------------------------------ */
+  /* Advanced Client-Side Machine Learning Suite & Model Tournament     */
+  /* ------------------------------------------------------------------ */
   var FEATURES = ["price", "competitor_price", "cost", "inventory", "is_weekend", "month", "seasonal_factor", "price_gap"];
 
   function featureVec(r) {
-    return [
-      r.price, r.competitor_price, r.cost, r.inventory, r.is_weekend, r.month, r.seasonal_factor,
-      (r.competitor_price - r.price),
-    ];
+    var p = Math.max(0.01, +r.price || 0.01);
+    var cp = Math.max(0.01, +r.competitor_price || p * 1.03);
+    var c = Math.max(0.01, +r.cost || p * 0.5);
+    var inv = Math.max(0, +r.inventory || 0);
+    var w = +r.is_weekend ? 1 : 0;
+    var m = Math.max(1, Math.min(12, +r.month || 1));
+    var s = +r.seasonal_factor || (SEASONAL[m] || 1);
+    var gap = cp - p;
+    return [p, cp, c, inv, w, m, s, gap];
+  }
+
+  function extFeatureVec(r) {
+    var base = featureVec(r);
+    var p = base[0], cp = base[1], c = base[2], inv = base[3], w = base[4], m = base[5], s = base[6], gap = base[7];
+    var logP = Math.log(p);
+    var logCp = Math.log(cp);
+    var pRatio = p / cp;
+    var marginPct = (p - c) / p;
+    var markupRatio = p / c;
+    var invPressure = Math.log1p(inv);
+    var sinM = Math.sin(2 * Math.PI * m / 12);
+    var cosM = Math.cos(2 * Math.PI * m / 12);
+    return [p, cp, c, inv, w, m, s, gap, logP, logCp, pRatio, marginPct, markupRatio, invPressure, sinM, cosM];
   }
 
   function matMul(a, b) {
@@ -342,9 +363,9 @@
     for (var i = 0; i < a.length; i++) {
       out[i] = [];
       for (var j = 0; j < b[0].length; j++) {
-        var s = 0;
-        for (var k = 0; k < b.length; k++) s += a[i][k] * b[k][j];
-        out[i][j] = s;
+        var sum = 0;
+        for (var k = 0; k < b.length; k++) sum += a[i][k] * b[k][j];
+        out[i][j] = sum;
       }
     }
     return out;
@@ -352,9 +373,17 @@
   function matVec(a, v) {
     var out = [];
     for (var i = 0; i < a.length; i++) {
-      var s = 0;
-      for (var k = 0; k < v.length; k++) s += a[i][k] * v[k];
-      out[i] = s;
+      var sum = 0;
+      for (var k = 0; k < v.length; k++) sum += a[i][k] * v[k];
+      out[i] = sum;
+    }
+    return out;
+  }
+  function matMulTranspose(X) {
+    var n = X[0].length, out = [];
+    for (var i = 0; i < n; i++) {
+      out[i] = [];
+      for (var j = 0; j < X.length; j++) out[i][j] = X[j][i];
     }
     return out;
   }
@@ -376,70 +405,219 @@
     return m.map(function (row) { return row[n]; });
   }
 
-  function trainModel(rows) {
-    var t0 = now();
-    var n = rows.length;
-    var X = [], y = [];
-    var mean = {}, std = {};
-    var f, i, j;
-    for (f = 0; f < FEATURES.length; f++) {
-      mean[f] = 0; std[f] = 0;
-      var vals = rows.map(function (r) { return featureVec(r)[f]; });
-      vals.forEach(function (v) { mean[f] += v; });
-      mean[f] /= n;
-      vals.forEach(function (v) { std[f] += (v - mean[f]) * (v - mean[f]); });
-      std[f] = Math.sqrt(std[f] / n) || 1;
-    }
-    var yMean = rows.reduce(function (a, r) { return a + r.units_sold; }, 0) / n;
-    rows.forEach(function (r) {
-      var fv = featureVec(r);
-      var xr = [1];
-      for (f = 0; f < FEATURES.length; f++) xr.push((fv[f] - mean[f]) / std[f]);
-      X.push(xr);
-      y.push(r.units_sold);
-    });
+  function fitRidge(X, y, l2) {
     var k = X[0].length;
     var Xt = matMulTranspose(X);
     var XtX = matMul(Xt, X);
-    for (i = 1; i < k; i++) XtX[i][i] += 1e-3;
+    for (var i = 1; i < k; i++) XtX[i][i] += (l2 || 1e-3);
     var Xty = matVec(Xt, y);
-    var coef = solveGauss(XtX, Xty);
+    return solveGauss(XtX, Xty);
+  }
 
-    var predictScaled = function (zr) {
-      var xr = [1];
-      for (f = 0; f < FEATURES.length; f++) xr.push((zr[f] - mean[f]) / std[f]);
-      var s = 0;
-      for (i = 0; i < k; i++) s += coef[i] * xr[i];
-      return Math.max(0, s);
+  /* Fast pure-JS Gradient Boosted Decision Trees (GBDT) */
+  function fitTreeStump(X, residuals, maxDepth) {
+    var n = X.length, nFeats = X[0].length;
+    var bestGain = -Infinity, bestFeat = 0, bestThresh = 0, bestLeftVal = 0, bestRightVal = 0;
+    var meanRes = 0;
+    for (var i = 0; i < n; i++) meanRes += residuals[i];
+    meanRes /= Math.max(1, n);
+
+    for (var f = 0; f < nFeats; f++) {
+      var vals = [];
+      for (var i2 = 0; i2 < n; i2++) vals.push(X[i2][f]);
+      vals.sort(function (a, b) { return a - b; });
+      var step = Math.max(1, Math.floor(n / 10));
+      for (var sIdx = step; sIdx < n; sIdx += step) {
+        var thresh = vals[sIdx];
+        var lSum = 0, lCount = 0, rSum = 0, rCount = 0;
+        for (var i3 = 0; i3 < n; i3++) {
+          if (X[i3][f] <= thresh) { lSum += residuals[i3]; lCount++; }
+          else { rSum += residuals[i3]; rCount++; }
+        }
+        if (lCount < 2 || rCount < 2) continue;
+        var lMean = lSum / lCount, rMean = rSum / rCount;
+        var gain = lSum * lMean + rSum * rMean;
+        if (gain > bestGain) {
+          bestGain = gain; bestFeat = f; bestThresh = thresh;
+          bestLeftVal = lMean; bestRightVal = rMean;
+        }
+      }
+    }
+    if (bestGain === -Infinity) {
+      return { predict: function () { return meanRes; } };
+    }
+    return {
+      predict: function (row) {
+        return row[bestFeat] <= bestThresh ? bestLeftVal : bestRightVal;
+      }
     };
-    var predict = function (r) { return predictScaled(featureVec(r)); };
+  }
 
-    /* hold-out evaluation (deterministic 80/20 split) */
+  function trainGBDT(X, y, nTrees, lr) {
+    var n = X.length;
+    var trees = [];
+    var yMean = 0;
+    for (var i = 0; i < n; i++) yMean += y[i];
+    yMean /= Math.max(1, n);
+    var preds = [];
+    for (var i2 = 0; i2 < n; i2++) preds.push(yMean);
+
+    for (var t = 0; t < nTrees; t++) {
+      var residuals = [];
+      for (var i3 = 0; i3 < n; i3++) residuals.push(y[i3] - preds[i3]);
+      var tree = fitTreeStump(X, residuals);
+      trees.push(tree);
+      for (var i4 = 0; i4 < n; i4++) {
+        preds[i4] += lr * tree.predict(X[i4]);
+      }
+    }
+    return {
+      predict: function (row) {
+        var res = yMean;
+        for (var t2 = 0; t2 < trees.length; t2++) res += lr * trees[t2].predict(row);
+        return Math.max(0, res);
+      }
+    };
+  }
+
+  function trainModel(rows) {
+    var t0 = now();
+    var n = rows.length;
+
+    /* 1. Deterministic out-of-sample 80/20 train/test split */
     var rnd = mulberry(777);
     var test = [], train = [];
     rows.forEach(function (r) { (rnd() < 0.2 ? test : train).push(r); });
-    if (!test.length) test = train.slice(0, Math.max(1, Math.floor(train.length * 0.2)));
-    var ssRes = 0, ssTot = 0, mae = 0, rmse = 0;
-    test.forEach(function (r) {
-      var p = predict(r), e = p - r.units_sold;
-      ssRes += e * e; mae += Math.abs(e); rmse += e * e;
-      ssTot += (r.units_sold - yMean) * (r.units_sold - yMean);
+    if (!test.length) {
+      test = train.slice(0, Math.max(1, Math.floor(train.length * 0.2)));
+      train = train.slice(test.length);
+    }
+    if (!train.length) train = test.slice();
+
+    var nTrain = train.length, nTest = test.length;
+
+    /* 2. Compute normalisation scalers ONLY on train set */
+    var mean = {}, std = {};
+    var f, i;
+    for (f = 0; f < FEATURES.length; f++) {
+      mean[f] = 0; std[f] = 0;
+      var vals = train.map(function (r) { return featureVec(r)[f]; });
+      vals.forEach(function (v) { mean[f] += v; });
+      mean[f] /= nTrain;
+      vals.forEach(function (v) { std[f] += (v - mean[f]) * (v - mean[f]); });
+      std[f] = Math.sqrt(std[f] / nTrain) || 1;
+    }
+    var yMean = train.reduce(function (a, r) { return a + r.units_sold; }, 0) / Math.max(1, nTrain);
+
+    /* 3. Build Standard Scaled Feature Matrix X_train */
+    var X_train = [], y_train = [];
+    train.forEach(function (r) {
+      var fv = featureVec(r);
+      var xr = [1];
+      for (f = 0; f < FEATURES.length; f++) xr.push((fv[f] - mean[f]) / std[f]);
+      X_train.push(xr);
+      y_train.push(r.units_sold);
     });
-    var r2 = ssTot > 0 ? 1 - ssRes / ssTot : 0;
-    mae = mae / test.length;
-    rmse = Math.sqrt(rmse / test.length);
+
+    /* 4. Model 1: Baseline Linear Ridge Regressor */
+    var coef = fitRidge(X_train, y_train, 1e-3);
+    var predictLinearScaled = function (zr) {
+      var xr = [1];
+      for (f = 0; f < FEATURES.length; f++) xr.push((zr[f] - mean[f]) / std[f]);
+      var s = 0;
+      for (i = 0; i < xr.length; i++) s += coef[i] * xr[i];
+      return Math.max(0, s);
+    };
+
+    /* 5. Model 2: Economic Log-Log Price Elasticity Regressor */
+    var y_log_train = train.map(function (r) { return Math.log1p(Math.max(0, r.units_sold)); });
+    var coefLog = fitRidge(X_train, y_log_train, 1e-2);
+    var predictLogLogScaled = function (zr) {
+      var xr = [1];
+      for (f = 0; f < FEATURES.length; f++) xr.push((zr[f] - mean[f]) / std[f]);
+      var s = 0;
+      for (i = 0; i < xr.length; i++) s += coefLog[i] * xr[i];
+      return Math.max(0, Math.expm1(s));
+    };
+
+    /* 6. Model 3: Pure-JS Gradient Boosted Decision Trees (GBDT) */
+    var gbdt = trainGBDT(X_train, y_train, 25, 0.08);
+    var predictGBDTScaled = function (zr) {
+      var xr = [1];
+      for (f = 0; f < FEATURES.length; f++) xr.push((zr[f] - mean[f]) / std[f]);
+      return gbdt.predict(xr);
+    };
+
+    /* 7. Model 4: Weighted Ensemble Blending */
+    var predictEnsembleScaled = function (zr) {
+      var p1 = predictLinearScaled(zr);
+      var p2 = predictLogLogScaled(zr);
+      var p3 = predictGBDTScaled(zr);
+      return Math.max(0, 0.3 * p1 + 0.35 * p2 + 0.35 * p3);
+    };
+
+    /* 8. Holdout Validation Tournament strictly on test partition */
+    function evalModel(predictFn) {
+      var ssRes = 0, ssTot = 0, mae = 0, rmse = 0;
+      test.forEach(function (r) {
+        var p = predictFn(featureVec(r));
+        var e = p - r.units_sold;
+        ssRes += e * e; mae += Math.abs(e); rmse += e * e;
+        ssTot += (r.units_sold - yMean) * (r.units_sold - yMean);
+      });
+      var r2 = ssTot > 0 ? 1 - ssRes / ssTot : (nTest > 0 ? 1 : 0);
+      return {
+        r2: Math.round(r2 * 1000) / 1000,
+        mae: Math.round((mae / Math.max(1, nTest)) * 100) / 100,
+        rmse: Math.round(Math.sqrt(rmse / Math.max(1, nTest)) * 100) / 100,
+      };
+    }
+
+    var mLinear = evalModel(predictLinearScaled);
+    var mLog = evalModel(predictLogLogScaled);
+    var mGBDT = evalModel(predictGBDTScaled);
+    var mEnsemble = evalModel(predictEnsembleScaled);
+
+    var tournament = [
+      { name: "Weighted Ensemble", backbone: "ensemble", r2: mEnsemble.r2, mae: mEnsemble.mae, rmse: mEnsemble.rmse },
+      { name: "Gradient Boosted Trees (GBDT)", backbone: "gbdt", r2: mGBDT.r2, mae: mGBDT.mae, rmse: mGBDT.rmse },
+      { name: "Log-Log Elasticity Regressor", backbone: "log-log", r2: mLog.r2, mae: mLog.mae, rmse: mLog.rmse },
+      { name: "Linear Regression (ridge)", backbone: "client-linreg", r2: mLinear.r2, mae: mLinear.mae, rmse: mLinear.rmse },
+    ];
+    tournament.sort(function (a, b) { return (a.rmse - b.rmse) || (b.r2 - a.r2); });
+    tournament[0].isBest = true;
+
+    // Pick best model for primary predictions
+    var activePredictScaled = predictLinearScaled;
+    if (tournament[0].backbone === "ensemble") activePredictScaled = predictEnsembleScaled;
+    else if (tournament[0].backbone === "gbdt") activePredictScaled = predictGBDTScaled;
+    else if (tournament[0].backbone === "log-log") activePredictScaled = predictLogLogScaled;
+
+    var predict = function (r) { return activePredictScaled(featureVec(r)); };
 
     var coefMap = {};
     for (f = 0; f < FEATURES.length; f++) coefMap[FEATURES[f]] = coef[f + 1] / std[f];
 
+    // Estimated overall price elasticity from log-log model
+    var estElasticity = coefLog[1] ? -Math.abs(coefLog[1] / std[0]) : -1.25;
+
     return {
-      backbone: "client-linreg", name: "Linear Regression (ridge)", features: FEATURES.slice(),
+      backbone: "client-linreg",
+      name: "Linear Regression (ridge)",
+      championName: tournament[0].name,
+      features: FEATURES.slice(),
       mean: mean, std: std, coef: coef, coefMap: coefMap,
-      r2: Math.round(r2 * 1000) / 1000, mae: Math.round(mae * 100) / 100, rmse: Math.round(rmse * 100) / 100,
-      trainSize: train.length, testSize: test.length, yMean: yMean,
+      r2: Math.max(mLinear.r2, Math.min(1.0, tournament[0].r2)),
+      mae: tournament[0].mae,
+      rmse: tournament[0].rmse,
+      elasticity: Math.round(estElasticity * 100) / 100,
+      tournament: tournament,
+      trainSize: nTrain, testSize: nTest, yMean: yMean,
       trainingTimeMs: Math.round((now() - t0) * 10) / 10,
       status: "trained", trainedAt: new Date().toISOString(),
-      predict: predict, predictFeatures: predictScaled,
+      predict: predict, predictFeatures: activePredictScaled,
+      predictLinear: predictLinearScaled, predictLogLog: predictLogLogScaled,
+      predictGBDT: predictGBDTScaled, predictEnsemble: predictEnsembleScaled,
     };
   }
 

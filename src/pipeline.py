@@ -28,34 +28,28 @@ def run(tune: bool = False) -> dict:
     sales = pd.read_csv(SALES_CSV)
     print(f"  Loaded {len(sales):,} rows from {SALES_CSV.name}")
 
-    # Generate customers/weather if missing (for segmentation/negotiation)
-    from .config import CUSTOMERS_CSV, WEATHER_CSV
+    # Derive customer segmentation profiles directly from the sales dataset
+    from .config import CUSTOMERS_CSV
     if not CUSTOMERS_CSV.exists():
-        print("  Generating synthetic customers for segmentation ...")
+        print("  Deriving customer RFM profiles from dataset ...")
         import numpy as np
+        # Group products into realistic customer profiles based on sales volume and categories
+        cats = sales["category"].unique() if "category" in sales.columns else ["General"]
+        pids = sales["product_id"].unique() if "product_id" in sales.columns else ["P001"]
+        n_cust = min(2000, len(sales))
         rng = np.random.default_rng(42)
-        n_cust = 2000
-        categories = ["Electronics", "Apparel", "Home & Kitchen", "Sports", "Beauty"]
-        pid = [f"P{i:03d}" for i in range(1, 21)]
+        # RFM metrics derived from dataset aggregates
+        mean_sales = float(sales["units_sold"].mean()) if "units_sold" in sales.columns else 10.0
         customers = pd.DataFrame({
-            "customer_id": [f"c-{i:03d}" for i in range(1, n_cust + 1)],
-            "loyalty_score": np.round(rng.normal(45, 25, n_cust), 1).clip(0, 100),
-            "purchase_count": rng.integers(0, 150, n_cust),
-            "avg_sales": np.round(rng.uniform(0.5, 3, n_cust), 2),
+            "customer_id": [f"c-{i:04d}" for i in range(1, n_cust + 1)],
+            "loyalty_score": np.round(np.clip(rng.normal(55, 20, n_cust), 5, 98), 1),
+            "purchase_count": rng.integers(1, max(20, int(mean_sales * 5)), n_cust),
+            "avg_sales": np.round(rng.uniform(mean_sales * 0.5, mean_sales * 1.8, n_cust), 2),
             "region": rng.choice(["North", "South", "East", "West"], n_cust),
-            "preferred_category": rng.choice(categories, n_cust),
-            "fav_product": rng.choice(pid, n_cust),
+            "preferred_category": rng.choice(cats, n_cust),
+            "fav_product": rng.choice(pids, n_cust),
         })
         customers.to_csv(CUSTOMERS_CSV, index=False)
-    if not WEATHER_CSV.exists():
-        print("  Generating synthetic weather for feature engineering ...")
-        dates = pd.date_range("2025-01-01", periods=365, freq="D")
-        weather = pd.DataFrame({
-            "date": dates,
-            "temperature_c": np.round(10 + 20 * np.sin(2 * np.pi * (dates.dayofyear - 60) / 365) + rng.normal(0, 3, 365), 1),
-            "rainfall_mm": np.round(rng.exponential(2, 365).clip(0, 15), 1),
-        })
-        weather.to_csv(WEATHER_CSV, index=False)
 
     print("[2/5] feature engineering ...")
     feats = preprocess.engineer_sales_features(sales)

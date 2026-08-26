@@ -93,17 +93,45 @@ def prepare_features(df: pd.DataFrame, target: str, features=None) -> tuple[np.n
     missing_before = int(df[feat_cols].isna().sum().sum())
     stats["missing_before"] = missing_before
 
-    # datetime -> month + weekday numeric features
+    # datetime -> month + weekday + cyclical harmonics
     for c in [c for c in feat_cols if _dtype_kind(df[c]) == "datetime"]:
         try:
             dt = pd.to_datetime(df[c], errors="coerce")
             df[c + "_month"] = dt.dt.month.fillna(0).astype(float)
             df[c + "_dow"] = dt.dt.dayofweek.fillna(0).astype(float)
+            m_rad = 2 * np.pi * df[c + "_month"] / 12.0
+            df[c + "_sin_m"] = np.sin(m_rad).astype(float)
+            df[c + "_cos_m"] = np.cos(m_rad).astype(float)
             feat_cols = [c + "_month" if x == c else x for x in feat_cols]
-            feat_cols = [c + "_dow" if x == c else x for x in feat_cols]
+            feat_cols.extend([c + "_dow", c + "_sin_m", c + "_cos_m"])
         except Exception:
             stats["dropped_columns"].append(c)
             feat_cols = [x for x in feat_cols if x != c]
+
+    # economic feature engineering (elasticity, margins, competitor ratios)
+    cols_map = {str(c).lower().strip(): c for c in df.columns}
+    p_col = cols_map.get("price") or cols_map.get("selling_price")
+    comp_col = cols_map.get("competitor_price") or cols_map.get("competitor")
+    cost_col = cols_map.get("cost") or cols_map.get("cogs")
+    inv_col = cols_map.get("inventory") or cols_map.get("stock_level")
+
+    if p_col and comp_col and p_col in df.columns and comp_col in df.columns:
+        p_val = pd.to_numeric(df[p_col], errors="coerce").fillna(0)
+        c_val = pd.to_numeric(df[comp_col], errors="coerce").fillna(0)
+        df["_price_gap"] = c_val - p_val
+        df["_price_ratio"] = np.where(c_val > 0, p_val / c_val, 1.0)
+        feat_cols.extend(["_price_gap", "_price_ratio"])
+
+    if p_col and cost_col and p_col in df.columns and cost_col in df.columns:
+        p_val = pd.to_numeric(df[p_col], errors="coerce").fillna(0)
+        cost_val = pd.to_numeric(df[cost_col], errors="coerce").fillna(0)
+        df["_margin_pct"] = np.where(p_val > 0, (p_val - cost_val) / p_val, 0.0)
+        feat_cols.append("_margin_pct")
+
+    if inv_col and inv_col in df.columns:
+        inv_val = pd.to_numeric(df[inv_col], errors="coerce").clip(lower=0).fillna(0)
+        df["_log_inv"] = np.log1p(inv_val)
+        feat_cols.append("_log_inv")
 
     # categorical encoding (one-hot, cardinality capped to avoid blow-up)
     encoded = []
@@ -135,7 +163,7 @@ def prepare_features(df: pd.DataFrame, target: str, features=None) -> tuple[np.n
             if df[c].isna().any():
                 df[c] = df[c].fillna(df[c].mode().iloc[0] if len(df[c].mode()) else "missing")
 
-    feature_names = feat_cols + encoded
+    feature_names = list(dict.fromkeys(feat_cols + encoded))
 
     missing_after = int(df[feature_names].isna().sum().sum())
     stats["missing_filled"] = max(0, missing_before - missing_after)
@@ -178,14 +206,14 @@ def _is_numeric_like(s: pd.Series) -> bool:
 def _build_models():
     models = [
         ("Linear Regression", LinearRegression()),
-        ("Random Forest", RandomForestRegressor(n_estimators=120, random_state=RANDOM_SEED, n_jobs=-1)),
+        ("Random Forest", RandomForestRegressor(n_estimators=80, max_depth=10, random_state=RANDOM_SEED, n_jobs=-1)),
         ("Gradient Boosting", GradientBoostingRegressor(
-            n_estimators=150, learning_rate=0.08, max_depth=3,
+            n_estimators=100, learning_rate=0.08, max_depth=4, subsample=0.85,
             random_state=RANDOM_SEED)),
     ]
     if HAS_XGB:
         models.append(("XGBoost", XGBRegressor(
-            n_estimators=200, learning_rate=0.08, max_depth=5,
+            n_estimators=150, learning_rate=0.08, max_depth=5, subsample=0.85, colsample_bytree=0.8,
             random_state=RANDOM_SEED, n_jobs=-1, verbosity=0)))
     return models
 
@@ -234,8 +262,12 @@ def run_pipeline(df: pd.DataFrame, target: str, features=None) -> dict:
 
         # cross-validation on the training portion only — for comparison
         try:
-            cv = cross_val_score(model, X_train, y_train, cv=CV_FOLDS,
-                                 scoring="r2", n_jobs=-1)
+            if len(X_train) > 3000:
+                cv_idx = np.random.RandomState(RANDOM_SEED).choice(len(X_train), size=3000, replace=False)
+                cv_X, cv_y = X_train[cv_idx], y_train[cv_idx]
+            else:
+                cv_X, cv_y = X_train, y_train
+            cv = cross_val_score(model, cv_X, cv_y, cv=CV_FOLDS, scoring="r2", n_jobs=1)
             cv_mean = float(np.mean(cv))
             cv_std = float(np.std(cv))
         except Exception:

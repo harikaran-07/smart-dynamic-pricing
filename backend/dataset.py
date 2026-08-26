@@ -146,7 +146,7 @@ def profile(df: pd.DataFrame, preferred_target: str | None = None) -> dict:
         for t in target_candidates:
             if t["column"] == preferred_target:
                 t["suitability"] = min(1.0, round(t["suitability"] + 0.3, 2))
-        target_candidates.sort(key=lambda t: -t["suitability"])
+        target_candidates.sort(key=lambda t: (t["column"] == preferred_target, t["suitability"]), reverse=True)
     suggested_target = target_candidates[0]["column"] if target_candidates else None
 
     messages = []

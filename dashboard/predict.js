@@ -179,17 +179,29 @@
 
     /* ML model card */
     var m = a.model;
-    var modelCard = el('<div class="pp-card wide"><h4>ML Model</h4><p class="sub">Trained on the active dataset with real hold-out metrics — no synthetic accuracy.</p>' +
+    var tourHtml = "";
+    if (m.tournament && m.tournament.length) {
+      tourHtml = '<div style="margin-top:14px;"><h5 style="margin:0 0 6px;font-size:13px;color:var(--txt)">Model Tournament Results</h5>' +
+        '<div class="pp-scroll"><table class="pp-table"><thead><tr><th>Model</th><th>Hold-out R²</th><th>MAE</th><th>RMSE</th><th>Status</th></tr></thead><tbody>' +
+        m.tournament.map(function (tm) {
+          var isBest = tm.isBest;
+          return '<tr' + (isBest ? ' style="background:rgba(91,140,255,0.12);font-weight:700"' : '') + '><td><b>' + esc(tm.name) + '</b></td><td>' +
+            fmt(tm.r2, 3) + '</td><td>' + fmt(tm.mae, 2) + '</td><td>' + fmt(tm.rmse, 2) + '</td><td>' +
+            (isBest ? '<span class="pp-chip" style="color:var(--ok);border-color:rgba(52,211,153,.35);padding:2px 8px;font-size:10px">BEST</span>' : '<span style="color:var(--faint);font-size:11px">Evaluated</span>') + '</td></tr>';
+        }).join("") + '</tbody></table></div></div>';
+    }
+
+    var modelCard = el('<div class="pp-card wide"><h4>ML Model Intelligence</h4><p class="sub">Trained with a strict 80/20 train/test split, economic elasticity estimation, and multi-model tournament.</p>' +
       '<div class="pp-kpis">' +
-      statKpi("Model", esc(m.name), "backbone " + esc(m.backbone)) +
-      statKpi("Training status", esc(m.status || "trained"), m.trainedAt ? "at " + new Date(m.trainedAt).toLocaleString() : "") +
-      statKpi("R² score", m.r2, "share of variance explained") +
+      statKpi("Champion Model", esc(m.championName || m.name), "winning backbone") +
+      statKpi("Price Elasticity (ε)", (m.elasticity != null ? fmt(m.elasticity, 2) : "—"), "demand responsiveness") +
+      statKpi("R² score", m.r2, "variance explained on test set") +
       statKpi("MAE", fmt(m.mae, 2) + " units", "mean absolute error") +
       statKpi("RMSE", fmt(m.rmse, 2) + " units", "root mean squared error") +
       statKpi("Train / test rows", fmt(m.trainSize) + " / " + fmt(m.testSize), "80 / 20 split") +
-      statKpi("Training time", fmt(m.trainingTimeMs) + " ms", "client-side training") +
+      statKpi("Training time", fmt(m.trainingTimeMs) + " ms", "multi-model tournament") +
       statKpi("Features", fmt(m.features.length), m.features.join(", ")) +
-      '</div></div>');
+      '</div>' + tourHtml + '</div>');
     wrap.appendChild(modelCard);
 
     /* prediction table */

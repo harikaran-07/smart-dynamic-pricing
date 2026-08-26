@@ -15,3 +15,6 @@ notebooks/
 .env
 .pytest_cache/
 .freebuff/
+catboost_info/
+optimize_*.py
+fix_*.py
