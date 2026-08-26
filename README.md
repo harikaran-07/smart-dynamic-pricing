@@ -39,11 +39,11 @@ source .venv/bin/activate
 
 pip install -r requirements.txt
 
-# 2) generate synthetic data (creates data/raw/*.csv via src/data/generate.py)
-python -m src.data.generate_data
+# 2) download the Kaggle dataset (creates data/raw/kaggle_sales.csv)
+python -m scripts.download_kaggle
 
 # 3) train models (creates models/*.joblib)
-python -m src.training.train
+python -m scripts.train_kaggle
 
 # 4) launch the API
 python -m src.api.app
@@ -56,7 +56,6 @@ python -m src.api.app
 src/
   config.py            # paths + hyperparams
   data/
-    generate_data.py   # synthetic sales/weather/competitor generator
     preprocess.py      # feature engineering
   models/
     demand.py          # forecasting regressors
