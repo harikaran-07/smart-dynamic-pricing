@@ -12,7 +12,8 @@ PROCESSED_DIR.mkdir(parents=True, exist_ok=True)
 MODEL_DIR.mkdir(parents=True, exist_ok=True)
 REPORTS_DIR.mkdir(parents=True, exist_ok=True)
 
-SALES_CSV = DATA_DIR / "sales.csv"
+KAGGLE_CSV = DATA_DIR / "kaggle_sales.csv"
+SALES_CSV = KAGGLE_CSV  # alias for backward compat
 CUSTOMERS_CSV = DATA_DIR / "customers.csv"
 WEATHER_CSV = DATA_DIR / "weather.csv"
 
