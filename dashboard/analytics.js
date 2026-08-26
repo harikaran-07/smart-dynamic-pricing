@@ -117,9 +117,9 @@
       kpi("Model R²", model.r2, "MAE " + model.mae + " units") +
       kpi("Training time", model.trainingTimeMs + " ms", "client-side training");
     var card = el('<div class="px-card wide"><h4>Automatic Model Analysis</h4>' +
-      '<p class="sub">Data cleaning, feature scaling and demand model training run automatically on the active dataset.</p>' +
+      '<p class="sub">Data cleaning, feature scaling and model training run automatically on the active dataset.</p>' +
       '<div class="px-kpis">' + kpis + '</div>' +
-      '<div class="px-accbar"><div class="mb"><span>R² (share of demand variance explained)</span><b>' + model.r2 + '</b></div>' +
+      '<div class="px-accbar"><div class="mb"><span>R² (share of variance explained)</span><b>' + model.r2 + '</b></div>' +
       '<div class="bar"><i style="width:' + Math.min(100, Math.round(Math.max(0, model.r2) * 100)) + '%"></i></div></div>' +
       '<div class="px-summary"><b>AI summary</b> — ' + P.insightText(a) + '</div></div>');
     wrap.appendChild(card);
@@ -209,7 +209,7 @@
       chip("Worst season", a.worst_season + " (" + fmt(seasons[a.worst_season]) + " units)", "lo") +
       chip("Best month", M[+a.best_month - 1] + " (" + fmt(a.monthly_sales[a.best_month]) + ")", "hi") +
       chip("Lowest sales month", M[+a.worst_month - 1] + " (" + fmt(a.monthly_sales[a.worst_month]) + ")", "lo") +
-      chip("Holiday demand uplift", "+" + a.holiday_impact_pct + "%", "") +
+      chip("Holiday uplift", "+" + a.holiday_impact_pct + "%", "") +
       chip("Weekend vs weekday", a.weekend_units + " vs " + a.weekday_units + " units/day", "") +
       '</div><div class="px-summary"><b>AI insight</b> — ' + seasonalInsight(a) + '</div></div>');
     wrap.appendChild(chips);
@@ -222,16 +222,7 @@
       yFmt: function (v) { return fmt(v, 0); }, showValues: "bars",
     });
 
-    var sm = monthSeries(a.seasonal_by_month);
-    var c2 = chartCard("Seasonal Demand", "Modelled seasonal factor by month");
-    wrap.appendChild(c2);
-    makeChart(c2.querySelector("canvas"), {
-      xLabels: sm.labels, title: "Seasonal factor",
-      series: [{ name: "Seasonal factor", color: "#34d399", data: sm.data, smooth: true, area: true }],
-      yFmt: function (v) { return fmt(v, 2); }, markers: false,
-    });
-
-    var c3 = chartCard("Holiday Impact", "Average daily demand on holiday vs regular days");
+    var c3 = chartCard("Holiday Impact", "Average daily units on holiday vs regular days");
     wrap.appendChild(c3);
     makeChart(c3.querySelector("canvas"), {
       xLabels: ["Regular days", "Holidays"],
@@ -240,7 +231,7 @@
     });
 
     var fest = festivalSeries(a);
-    var c4 = chartCard("Festival Impact", "Average daily demand in festival months vs the rest of the year");
+    var c4 = chartCard("Festival Impact", "Average daily units in festival months vs the rest of the year");
     wrap.appendChild(c4);
     makeChart(c4.querySelector("canvas"), {
       xLabels: fest.labels,
@@ -248,7 +239,7 @@
       yFmt: function (v) { return fmt(v, 1); }, showValues: "bars",
     });
 
-    var c5 = chartCard("Weekend vs Weekday", "Average demand split by day type");
+    var c5 = chartCard("Weekend vs Weekday", "Average daily units split by day type");
     wrap.appendChild(c5);
     makeChart(c5.querySelector("canvas"), {
       xLabels: ["Weekday", "Weekend"],
@@ -275,9 +266,9 @@
   }
 
   function seasonalInsight(a) {
-    return "Demand is strongly seasonal: " + a.best_season + " outperforms " + a.worst_season + " by " +
+    return "Sales are strongly seasonal: " + a.best_season + " outperforms " + a.worst_season + " by " +
       Math.round((a.seasons[a.best_season] / Math.max(1, a.seasons[a.worst_season]) - 1) * 100) +
-      "%. Peak month is " + M[+a.best_month - 1] + ", and holiday periods lift average demand by " +
+      "%. Peak month is " + M[+a.best_month - 1] + ", and holiday periods lift average sales by " +
       a.holiday_impact_pct + "% — plan inventory and promotions around " + M[+a.best_month - 1] + ".";
   }
 
@@ -397,7 +388,7 @@
 
     /* ML model card */
     var m = a.model;
-    var modelCard = el('<div class="px-card wide"><h4>ML Model</h4><p class="sub">Real hold-out metrics from the client-side demand model — no fake accuracy.</p>' +
+    var modelCard = el('<div class="px-card wide"><h4>ML Model</h4><p class="sub">Real hold-out metrics from the client-side pricing model — no fake accuracy.</p>' +
       '<div class="px-kpis">' +
       kpi("Model used", m.name, m.backbone) +
       kpi("Training status", m.status, m.trainedAt ? new Date(m.trainedAt).toLocaleString() : "") +
@@ -421,7 +412,6 @@
     var labels = table.map(function (r) { return r.product_id; });
     var base = table.map(function (r) { return r.base_price; });
     var rec = table.map(function (r) { return r.recommended_price; });
-    var demand = table.map(function (r) { return r.expected_demand; });
     var revenue = table.map(function (r) { return r.expected_revenue; });
     var curRev = a.productList.map(function (p) { return Math.round(p.revenue / Math.max(1, a.months * 30)); });
     var curProfit = a.productList.map(function (p) { return Math.round(p.profit / Math.max(1, a.months * 30)); });
@@ -436,19 +426,6 @@
         { name: "Recommended", color: "#34d399", type: "bar", data: rec },
       ],
       yFmt: function (v) { return P.fmtMoney(v, 0); },
-    });
-
-    /* Revenue comparison */
-    var c2 = chartCard("Revenue Comparison", "Expected revenue vs actual revenue at recommended price", "px-revenue");
-    wrap.appendChild(c2);
-    makeChart(c2.querySelector("canvas"), {
-      xLabels: labels,
-      series: [
-        { name: "Expected demand", color: "#8b5cf6", type: "bar", data: demand, axis: "left" },
-        { name: "Actual price", color: "#fbbf24", data: base, smooth: true, axis: "right" },
-      ],
-      yFmt: function (v) { return fmt(v, 0); },
-      yFmtRight: function (v) { return P.fmtMoney(v, 0); },
     });
 
     /* Revenue comparison */
@@ -479,7 +456,7 @@
     });
 
     /* Sales/Demand trend */
-    var c5 = chartCard("Sales / Demand Trend — " + state.product, "Daily units sold for the selected product (highest/lowest marked)");
+    var c5 = chartCard("Sales Trend — " + state.product, "Daily units sold for the selected product (highest/lowest marked)");
     c5.classList.add("wide");
     wrap.appendChild(c5);
     var s = P.salesSeries(state.product);
@@ -582,7 +559,7 @@
       '</div></div>' +
       '<div class="px-content" id="px-content"></div>' +
       '<div class="px-row" style="padding:0 18px 18px">' +
-      '<label>Product for demand / sales / price charts</label>' +
+      '<label>Product for sales / price charts</label>' +
       '<select id="px-product"></select></div>' +
       '</div>');
     host.appendChild(panel);

@@ -199,12 +199,12 @@
       return '<tr><td><b>' + esc(r.product_id) + '</b></td><td>' + esc(r.category) + '</td><td>' + P.fmtMoney(r.base_price) +
         '</td><td><b>' + P.fmtMoney(r.recommended_price) + '</b></td>' +
         '<td class="' + (up ? "up" : down ? "down" : "") + '">' + (up ? "+" : "") + r.price_change_pct + '%</td>' +
-        '<td>' + fmt(r.expected_demand, 1) + '</td><td>' + P.fmtMoney(r.expected_revenue, 0) + '</td></tr>';
+        '<td>' + P.fmtMoney(r.expected_revenue, 0) + '</td></tr>';
     }).join("");
     var predCard = el('<div class="pp-card wide"><h4>Prediction Results</h4>' +
-      '<p class="sub">Recommended price per product from the trained demand model. Use the currency selector to switch between USD ($) and INR (₹).</p>' +
+      '<p class="sub">Recommended price per product from the trained pricing model. Use the currency selector to switch between USD ($) and INR (₹).</p>' +
       '<div class="pp-scroll"><table class="pp-table"><thead><tr>' +
-      ['Product', 'Category', 'Base price', 'Recommended', 'Change', 'Expected demand', 'Expected revenue'].map(function (h) { return '<th>' + h + '</th>'; }).join("") +
+      ['Product', 'Category', 'Base price', 'Recommended', 'Change', 'Expected revenue'].map(function (h) { return '<th>' + h + '</th>'; }).join("") +
       '</tr></thead><tbody>' + tableHtml + '</tbody></table></div>' +
       '<div class="pp-actions"><button class="pp-btn" id="pp-export">Download Predictions (CSV)</button>' +
       '<button class="pp-btn ghost" id="pp-refresh">Retrain Model</button></div></div>');
@@ -257,7 +257,6 @@
     var months = P.MONTH_NAMES.map(function (m, i) { return '<option value="' + (i + 1) + '">' + m + '</option>'; }).join("");
     return '<div class="pp-form">' +
       '<div><label>Current price</label><input id="pp-m-price" type="number" step="0.01" value="49.99" min="0"/></div>' +
-      '<div><label>Demand (units/day)</label><input id="pp-m-demand" type="number" value="20" min="0"/></div>' +
       '<div><label>Sales (units)</label><input id="pp-m-sales" type="number" value="20" min="0"/></div>' +
       '<div><label>Inventory / stock</label><input id="pp-m-inv" type="number" value="50" min="0"/></div>' +
       '<div><label>Competitor price</label><input id="pp-m-comp" type="number" step="0.01" value="52.00" min="0"/></div>' +
@@ -274,7 +273,6 @@
   function readManual() {
     return {
       price: +document.getElementById("pp-m-price").value || 0,
-      demand: +document.getElementById("pp-m-demand").value,
       inventory: +document.getElementById("pp-m-inv").value,
       competitor: +document.getElementById("pp-m-comp").value,
       cost: document.getElementById("pp-m-cost").value ? +document.getElementById("pp-m-cost").value : undefined,
@@ -297,8 +295,6 @@
       '<div class="pp-kpis">' +
       '<div class="pp-kpi"><div class="k">Recommended price</div><div class="v ok">' + P.fmtMoney(o.recommended_price) + '</div>' +
       '<div class="s">cost floor ' + P.fmtMoney(res.input.cost != null ? res.input.cost : o.recommended_price * 0.5) + '</div></div>' +
-      '<div class="pp-kpi"><div class="k">Expected demand</div><div class="v">' + fmt(o.demand, 1) + ' units</div>' +
-      '<div class="s">at the recommended price</div></div>' +
       '<div class="pp-kpi"><div class="k">Expected revenue</div><div class="v">' + P.fmtMoney(o.revenue, 0) + '</div>' +
       '<div class="s">' + P.fmtMoney(c.revenue, 0) + ' today</div></div>' +
       '<div class="pp-kpi"><div class="k">Expected profit</div><div class="v">' + P.fmtMoney(o.profit, 0) + '</div>' +
@@ -320,7 +316,7 @@
 
     elHost.innerHTML =
       kpis +
-      '<div class="pp-expl"><b>Why this price?</b> "The recommended price is based on demand, inventory, competitor pricing, and historical sales patterns." At the recommended price, revenue is expected to ' +
+      '<div class="pp-expl"><b>Why this price?</b> "The recommended price is based on inventory, competitor pricing, and historical sales patterns." At the recommended price, revenue is expected to ' +
       (revDelta >= 0 ? "rise" : "fall") + ' by ' + Math.abs(revDelta) + '% and profit to ' + (profDelta >= 0 ? "rise" : "fall") + ' by ' +
       Math.abs(profDelta) + '% versus the current scenario.</div>' +
       '<div class="pp-card" style="padding:0"><h4 style="padding:16px 18px 0">Pricing Recommendation</h4>' +

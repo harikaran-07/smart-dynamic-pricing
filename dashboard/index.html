@@ -226,13 +226,11 @@
     <section class="grid">
       <div class="card">
         <h3>Price Recommendation</h3>
-        <p class="sub">Revenue-maximising price from demand model, inventory &amp; competition</p>
+        <p class="sub">Revenue-maximising price from inventory &amp; competition</p>
         <label>Product ID</label>
         <select id="prices-product"></select>
         <label>Inventory (units)</label>
         <input id="prices-inv" type="number" value="50" min="0"/>
-        <label>Demand pressure (0–1)</label>
-        <input id="prices-pressure" type="number" value="0.5" step="0.1" min="0" max="1"/>
         <label>Competitor price (optional)</label>
         <input id="prices-competitor" type="number" step="0.01" placeholder="auto"/>
         <button id="btn-price">Optimize Price</button>
@@ -241,13 +239,11 @@
 
       <div class="card">
         <h3>AI Negotiation Agent</h3>
-        <p class="sub">Personalised discount based on loyalty, segment, demand &amp; budget</p>
+        <p class="sub">Personalised discount based on loyalty, segment &amp; budget</p>
         <label>Customer ID</label>
         <select id="neg-customer"></select>
         <label>Product ID</label>
         <select id="neg-product"></select>
-        <label>Demand pressure (0–1)</label>
-        <input id="neg-pressure" type="number" value="0.5" step="0.1" min="0" max="1"/>
         <label>Max budget (optional)</label>
         <input id="neg-budget" type="number" step="0.01" placeholder="e.g. 90.00"/>
         <button id="btn-neg">Run Negotiation</button>
@@ -261,8 +257,6 @@
         <select id="rl-product"></select>
         <label>Inventory (units)</label>
         <input id="rl-inv" type="number" value="50" min="0"/>
-        <label>Demand pressure (0–1)</label>
-        <input id="rl-pressure" type="number" value="0.5" step="0.1" min="0" max="1"/>
         <label>Competitor price (optional)</label>
         <input id="rl-competitor" type="number" step="0.01" placeholder="auto"/>
         <button id="btn-rl">Run RL Agent</button>
@@ -527,17 +521,16 @@ $("btn-price").onclick = async () => {
       product_id: $("prices-product").value,
       inventory: +$("prices-inv").value || 50,
       competitor_price: $("prices-competitor").value ? +$("prices-competitor").value : null,
-      demand_pressure: clamp(+$("prices-pressure").value || 0.5, 0, 1) });
+});
     const rc = resultEl($("price-out"));
     rc.head("Optimization result", P() && P().getCurrency ? P().getCurrency().code : "USD");
     rc.row("Recommended price", money(r.recommended_price), "hero");
-    rc.row("Expected demand", fmt(r.expected_demand) + " units");
     rc.row("Expected revenue", money(r.expected_revenue));
     rc.row("Competitor price", money(r.competitor_price));
     rc.row("Inventory", fmt(r.inventory));
     rc.row("Cost", money(r.cost));
     if (r.backend) $("price-out").insertAdjacentHTML("beforeend",
-      `<p style="margin:8px 14px;font-size:11.5px;color:var(--faint);font-style:italic">${r.caveat || "ML-based estimate from the backend demand model, not guaranteed."}</p>`);
+      `<p style="margin:8px 14px;font-size:11.5px;color:var(--faint);font-style:italic">${r.caveat || "ML-based estimate, not guaranteed."}</p>`);
   }catch(e){ showError($("price-out"), e); }
 };
 
@@ -546,7 +539,7 @@ $("btn-neg").onclick = async () => {
     const r = await dataApi("/api/negotiate", {
       customer_id: $("neg-customer").value, product_id: $("neg-product").value,
       max_budget: $("neg-budget").value ? +$("neg-budget").value : null,
-      demand_pressure: clamp(+$("neg-pressure").value || 0.5, 0, 1), inventory: 50 });
+      inventory: 50 });
     const rc = resultEl($("neg-out"));
     rc.head(r.agreed ? "Deal agreed" : "No deal",
       `<span class="badge ${r.agreed ? "" : "warn"}">${r.rounds} round${r.rounds>1?"s":""}</span>`);
@@ -562,14 +555,13 @@ $("btn-rl").onclick = async () => {
     const r = await dataApi("/api/rl-price", {
       product_id: $("rl-product").value,
       inventory: +$("rl-inv").value || 50,
-      demand_pressure: clamp(+$("rl-pressure").value || 0.5, 0, 1),
       competitor_price: $("rl-competitor").value ? +$("rl-competitor").value : null });
     const rc = resultEl($("rl-out"));
     rc.head("RL decision · step " + fmt(r.learning_steps), `×${r.action_multiplier}`);
     rc.row("RL price", money(r.price), "hero");
     rc.row("Action index", "#" + r.action_index + " (multiplier ×" + r.action_multiplier + ")");
     const st = r.product_state;
-    rc.row("Market state", `inv ${fmt(st.inventory)} · demand ${fmt(st.demand_pressure)} · gap ${fmt(st.competitor_gap ?? st.competitor_gap)}`);
+    rc.row("Market state", `inv ${fmt(st.inventory)} · gap ${fmt(st.competitor_gap)}`);
     rc.row("Q-values", r.q_values.map(v => fmt(v)).join(" · "));
   }catch(e){ showError($("rl-out"), e); }
 };

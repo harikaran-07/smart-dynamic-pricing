@@ -169,8 +169,8 @@ def recommend(df: pd.DataFrame, cols: dict, row: dict, objective: str = "revenue
     if not cols["price"] or not cols["units"]:
         return {
             "supports_optimization": False,
-            "reason": ("This dataset has no price column and/or no demand (units sold) "
-                       "column, so reliable price optimization is not possible. It can "
+            "reason": ("This dataset has no price column and/or no units-sold column, "
+                       "so reliable price optimization is not possible. It can "
                        "still be used for sales prediction."),
             "current": None, "candidates": [], "optimal": None,
             "reasons": [], "demand_model": None, "caveat": None,
@@ -205,8 +205,8 @@ def recommend(df: pd.DataFrame, cols: dict, row: dict, objective: str = "revenue
         if model.kind == "unsupported":
             return {
                 "supports_optimization": False,
-                "reason": ("Not enough price/demand variation was found in this dataset "
-                           "to fit a demand curve. The data is suitable for prediction "
+                "reason": ("Not enough price/sales variation was found in this dataset "
+                           "to fit a pricing curve. The data is suitable for prediction "
                            "but insufficient for reliable dynamic-price optimization."),
                 "current": None, "candidates": [], "optimal": None,
                 "reasons": [], "demand_model": None, "caveat": None,
@@ -215,8 +215,8 @@ def recommend(df: pd.DataFrame, cols: dict, row: dict, objective: str = "revenue
     if model.kind == "unsupported":
         return {
             "supports_optimization": False,
-            "reason": ("Not enough price/demand variation was found in this dataset "
-                       "to fit a demand curve. The data is suitable for prediction "
+            "reason": ("Not enough price/sales variation was found in this dataset "
+                       "to fit a pricing curve. The data is suitable for prediction "
                        "but insufficient for reliable dynamic-price optimization."),
             "current": None, "candidates": [], "optimal": None,
             "reasons": [], "demand_model": None, "caveat": None,
@@ -290,7 +290,7 @@ def recommend(df: pd.DataFrame, cols: dict, row: dict, objective: str = "revenue
         has_cost=bool(cols["cost"]), rules=rules)
 
     caveat = ("This recommendation is an ML-based estimate built from the uploaded "
-              "dataset's own price→demand relationship. It is not a guaranteed "
+              "dataset's own price and sales history. It is not a guaranteed "
               "real-world result — validate it with a small A/B change first.")
 
     optimal_payload = {
@@ -335,23 +335,23 @@ def reliability(model: DemandModel, cur_price: float,
     reasons = []
     if model.n_obs >= 150:
         points += 3
-        reasons.append(f"Solid history: the demand curve was fitted on {model.n_obs} rows.")
+        reasons.append(f"Solid history: the curve was fitted on {model.n_obs} rows.")
     elif model.n_obs >= 30:
         points += 2
-        reasons.append(f"Moderate history: only {model.n_obs} rows fit the demand curve.")
+        reasons.append(f"Moderate history: only {model.n_obs} rows fit the curve.")
     else:
         points += 1
         reasons.append(f"Thin history: just {model.n_obs} rows — treat the estimate with care.")
 
     if model.r2 >= 0.3:
         points += 3
-        reasons.append(f"Good demand fit (R² {model.r2:.2f} on the log-log curve).")
+        reasons.append(f"Good fit (R² {model.r2:.2f} on the log-log curve).")
     elif model.r2 >= 0.1:
         points += 2
-        reasons.append(f"Acceptable demand fit (R² {model.r2:.2f}) — price explains part of demand.")
+        reasons.append(f"Acceptable fit (R² {model.r2:.2f}) — price explains part of the variation.")
     else:
         points += 1
-        reasons.append(f"Weak demand fit (R² {model.r2:.2f}) — other factors beyond price drive sales.")
+        reasons.append(f"Weak fit (R² {model.r2:.2f}) — other factors beyond price drive sales.")
 
     if -3.0 <= model.elasticity <= -0.3:
         points += 2
@@ -384,7 +384,7 @@ def portfolio(df: pd.DataFrame, cols: dict, objective: str = "revenue",
     the products with the largest recommended price changes first."""
     if not cols["price"] or not cols["units"]:
         return {"items": [], "supported": 0, "total": 0,
-                "note": "No price or demand column — portfolio pricing is unavailable."}
+                "note": "No price or units column — portfolio pricing is unavailable."}
     items = []
     seen = 0
     if cols["group"]:
@@ -448,28 +448,28 @@ def build_reasons(model: DemandModel, cur_price: float, opt: dict, cur_demand: f
     elif delta < 0:
         reasons.append({
             "icon": "↓", "tone": "down",
-            "text": f"A lower price is recommended — the fitted demand curve from your "
+            "text": f"A lower price is recommended — the fitted curve from your "
                     f"data expects substantially more units at {opt['price']:.2f}.",
         })
     else:
         reasons.append({
             "icon": "→", "tone": "flat",
             "text": "The current price already sits at the revenue-maximising point "
-                    "of the fitted demand curve.",
+                    "of the fitted curve.",
         })
 
     demand_ratio = opt["estimated_demand"] / max(cur_demand, 1e-9)
     if demand_ratio > 1.05:
         reasons.append({
             "icon": "↑", "tone": "up",
-            "text": f"Estimated demand at the recommended price is "
+            "text": f"Estimated units sold at the recommended price is "
                     f"{opt['estimated_demand']:.1f} units/day vs "
                     f"{cur_demand:.1f} today (+{round((demand_ratio-1)*100)}%).",
         })
     elif demand_ratio < 0.95:
         reasons.append({
             "icon": "↘", "tone": "down",
-            "text": f"Higher price reduces estimated demand to "
+            "text": f"Higher price reduces estimated units to "
                     f"{opt['estimated_demand']:.1f} units/day — offset by better margin.",
         })
 
@@ -479,13 +479,13 @@ def build_reasons(model: DemandModel, cur_price: float, opt: dict, cur_demand: f
             reasons.append({
                 "icon": "↗", "tone": "up",
                 "text": f"The recommendation sits {gap:.0f}% above the competitor price "
-                        f"({competitor:.2f}) — supported by your dataset's demand curve.",
+                        f"({competitor:.2f}) — supported by your dataset's fitted curve.",
             })
         elif gap < -3:
             reasons.append({
                 "icon": "↘", "tone": "down",
                 "text": f"The recommendation sits {abs(gap):.0f}% below the competitor "
-                        f"price ({competitor:.2f}) to defend demand.",
+                        f"price ({competitor:.2f}) to defend sales.",
             })
         else:
             reasons.append({
@@ -500,13 +500,13 @@ def build_reasons(model: DemandModel, cur_price: float, opt: dict, cur_demand: f
             reasons.append({
                 "icon": "⚠", "tone": "flat",
                 "text": f"Inventory is limited ({inventory:.0f} units) — the "
-                        "recommended price balances demand against stock levels.",
+                        "recommended price balances expected sales against stock levels.",
             })
         else:
             reasons.append({
                 "icon": "→", "tone": "flat",
                 "text": f"Inventory ({inventory:.0f} units) is sufficient to absorb the "
-                        f"estimated demand of {est:.1f} units/day.",
+                        f"estimated sales of {est:.1f} units/day.",
             })
 
     if cost and has_cost and objective == "profit":
@@ -520,18 +520,18 @@ def build_reasons(model: DemandModel, cur_price: float, opt: dict, cur_demand: f
         reasons.append({
             "icon": "◎", "tone": "flat",
             "text": "Chosen objective: revenue. The recommended price maximises "
-                    "estimated price × demand from the fitted curve.",
+                    "estimated price × units from the fitted curve.",
         })
     else:
         reasons.append({
             "icon": "◎", "tone": "flat",
             "text": "Chosen objective: profit. The recommended price maximises "
-                    "estimated (price − cost) × demand.",
+                    "estimated (price − cost) × units.",
         })
 
     reasons.append({
         "icon": "ℹ", "tone": "flat",
-        "text": f"Demand model: {model.kind}-level log-log fit on {model.n_obs} rows "
+        "text": f"Pricing model: {model.kind}-level log-log fit on {model.n_obs} rows "
                 f"(R² {model.r2:.3f}) — a statistical estimate, not a guarantee.",
     })
     for rule in (rules or []):

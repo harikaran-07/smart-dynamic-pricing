@@ -638,12 +638,6 @@
     var cost = product ? product.cost : (opts.cost != null ? opts.cost : base * 0.5);
     var rec = optimizePrice(product || { product_id: "MANUAL", base_price: base, cost: cost, competitor_price: comp || base * 1.03, inventory: inv }, opts);
 
-    /* demand pressure: compare modelled demand at base vs typical baseline */
-    var press = opts.demand_pressure != null ? opts.demand_pressure : 0.5;
-    if (press >= 0.7) reasons.push({ icon: "↗", tone: "up", text: "High demand pressure (" + Math.round(press * 100) + "%) supports a price increase." });
-    else if (press <= 0.3) reasons.push({ icon: "↘", tone: "down", text: "Low demand pressure (" + Math.round(press * 100) + "%) — a modest price reduction can stimulate sales." });
-    else reasons.push({ icon: "→", tone: "flat", text: "Demand pressure is moderate (" + Math.round(press * 100) + "%), keeping the price near the optimum." });
-
     /* inventory */
     if (inv <= 20) reasons.push({ icon: "↑", tone: "up", text: "Low inventory (" + inv + " units) lets us raise the price to protect margin." });
     else if (inv >= 200) reasons.push({ icon: "↓", tone: "down", text: "High inventory (" + inv + " units) supports a lower price to move stock." });
@@ -661,7 +655,7 @@
     var month = +opts.month || new Date().getMonth() + 1;
     var season = SEASONAL[month] || 1;
     if (season > 1.2) reasons.push({ icon: "↗", tone: "up", text: "Peak season (" + MONTH_NAMES[month - 1] + ", factor " + season + ") justifies a higher price." });
-    else if (season < 0.9) reasons.push({ icon: "↘", tone: "down", text: "Off-peak season (" + MONTH_NAMES[month - 1] + ", factor " + season + ") — a lower price keeps demand flowing." });
+    else if (season < 0.9) reasons.push({ icon: "↘", tone: "down", text: "Off-peak season (" + MONTH_NAMES[month - 1] + ", factor " + season + ") — a lower price keeps sales moving." });
 
     /* margin */
     var margin = (rec.recommended_price - cost) / rec.recommended_price;
@@ -958,9 +952,9 @@
     if (topP) parts.push("Product " + topP.product_id + " generates the highest profit (" + fmtMoney(topP.profit, 0) + ").");
     var bestCat = a.best_revenue_category;
     if (bestCat && bestCat.name) parts.push("The " + bestCat.name + " category leads revenue (" + fmtMoney(bestCat.revenue, 0) + ").");
-    parts.push("Demand peaks in " + MONTH_NAMES[+a.best_month - 1] + " (" + a.monthly_sales[a.best_month].toLocaleString("en-IN") +
-      " units) and is weakest in " + MONTH_NAMES[+a.worst_month - 1] + ".");
-    if (a.holiday_impact_pct) parts.push("Holiday periods lift average demand by " + a.holiday_impact_pct + "% vs. normal days, and weekends average " +
+    parts.push("Sales peak in " + MONTH_NAMES[+a.best_month - 1] + " (" + a.monthly_sales[a.best_month].toLocaleString("en-IN") +
+      " units) and are weakest in " + MONTH_NAMES[+a.worst_month - 1] + ".");
+    if (a.holiday_impact_pct) parts.push("Holiday periods lift average sales by " + a.holiday_impact_pct + "% vs. normal days, and weekends average " +
       a.weekend_units + " units/day vs " + a.weekday_units + " on weekdays.");
     var m = a.model;
     if (m) parts.push("A client-side " + m.name + " model reached R² " + m.r2 + " (MAE " + m.mae + " units) in " + m.trainingTimeMs + " ms across " + m.features.length + " features.");
@@ -1023,11 +1017,11 @@
 
   function exportPredictions() {
     var a = computeIfNeeded();
-    var headers = ["product_id", "category", "base_price", "cost", "recommended_price", "expected_demand", "expected_revenue", "price_change_pct", "current_revenue", "current_profit"];
+    var headers = ["product_id", "category", "base_price", "cost", "recommended_price", "expected_revenue", "price_change_pct", "current_revenue", "current_profit"];
     if (!a) return { csv: toCSV(headers, []), name: "smart-pricing-predictions-" + new Date().toISOString().slice(0, 10) + ".csv" };
     var rows = a.productList.map(function (p) {
       var rec = optimizePrice(p, {});
-      return [p.product_id, p.category, p.base_price, p.cost, rec.recommended_price, rec.expected_demand, rec.expected_revenue,
+      return [p.product_id, p.category, p.base_price, p.cost, rec.recommended_price, rec.expected_revenue,
       Math.round((rec.recommended_price - p.base_price) / p.base_price * 1000) / 10, p.revenue, p.profit];
     });
     return { csv: toCSV(headers, rows), name: "smart-pricing-predictions-" + new Date().toISOString().slice(0, 10) + ".csv" };
