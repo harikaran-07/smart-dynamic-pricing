@@ -1,8 +1,9 @@
-"""Demand forecasting regressors: Linear Regression, XGBoost."""
+"""Demand forecasting regressors: Linear Regression, XGBoost, LightGBM, CatBoost."""
 from __future__ import annotations
 
 import numpy as np
 import pandas as pd
+from sklearn.ensemble import GradientBoostingRegressor, RandomForestRegressor
 from sklearn.linear_model import LinearRegression
 from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score
 from sklearn.model_selection import train_test_split
@@ -12,8 +13,20 @@ from sklearn.preprocessing import StandardScaler
 try:
     from xgboost import XGBRegressor
     XGB_AVAILABLE = True
-except ImportError:  # pragma: no cover
+except ImportError:
     XGB_AVAILABLE = False
+
+try:
+    from lightgbm import LGBMRegressor
+    LGB_AVAILABLE = True
+except ImportError:
+    LGB_AVAILABLE = False
+
+try:
+    from catboost import CatBoostRegressor
+    CB_AVAILABLE = True
+except ImportError:
+    CB_AVAILABLE = False
 
 FEATURES = [
     "price", "competitor_price", "price_vs_competitor", "price_ratio_to_base",
@@ -23,16 +36,17 @@ FEATURES = [
 ]
 
 
-from sklearn.ensemble import RandomForestRegressor, GradientBoostingRegressor
-
-
 def make_pipelines() -> dict[str, Pipeline]:
     lr = Pipeline([("scaler", StandardScaler()), ("reg", LinearRegression())])
     rf = Pipeline([
-        ("reg", RandomForestRegressor(n_estimators=100, max_depth=10, random_state=42, n_jobs=-1))
+        ("reg", RandomForestRegressor(
+            n_estimators=300, max_depth=12, min_samples_leaf=5,
+            random_state=42, n_jobs=-1))
     ])
     gb = Pipeline([
-        ("reg", GradientBoostingRegressor(n_estimators=120, learning_rate=0.08, max_depth=5, random_state=42))
+        ("reg", GradientBoostingRegressor(
+            n_estimators=300, learning_rate=0.05, max_depth=6,
+            subsample=0.85, random_state=42))
     ])
     models: dict[str, Pipeline] = {
         "linear": lr,
@@ -40,12 +54,27 @@ def make_pipelines() -> dict[str, Pipeline]:
         "gradient_boosting": gb,
     }
     if XGB_AVAILABLE:
-        xgb = Pipeline([
-            ("reg", XGBRegressor(n_estimators=200, learning_rate=0.08, max_depth=6,
-                                 subsample=0.85, colsample_bytree=0.8,
-                                 random_state=42, n_jobs=-1)),
+        models["xgboost"] = Pipeline([
+            ("reg", XGBRegressor(
+                n_estimators=500, learning_rate=0.04, max_depth=8,
+                subsample=0.85, colsample_bytree=0.8,
+                reg_alpha=0.1, reg_lambda=1.0,
+                random_state=42, n_jobs=-1, verbosity=0)),
         ])
-        models["xgboost"] = xgb
+    if LGB_AVAILABLE:
+        models["lightgbm"] = Pipeline([
+            ("reg", LGBMRegressor(
+                n_estimators=500, learning_rate=0.04, max_depth=8,
+                subsample=0.85, colsample_bytree=0.8,
+                reg_alpha=0.1, reg_lambda=1.0,
+                random_state=42, n_jobs=-1, verbosity=-1)),
+        ])
+    if CB_AVAILABLE:
+        models["catboost"] = Pipeline([
+            ("reg", CatBoostRegressor(
+                iterations=500, learning_rate=0.04, depth=8,
+                l2_leaf_reg=3.0, random_seed=42, verbose=0)),
+        ])
     return models
 
 
