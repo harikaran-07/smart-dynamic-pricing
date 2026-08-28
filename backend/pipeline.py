@@ -4,17 +4,12 @@ CSV -> validation -> cleaning -> missing-value handling -> categorical
 encoding -> feature selection -> train/test split -> model training ->
 cross-validation comparison -> holdout evaluation -> best model.
 
-Metrics are R², MAE, RMSE, MAPE and sMAPE — never "accuracy". Evaluation
-numbers come only from the held-out test set; cross-validation is used only for model
+Metrics are R², MAE and RMSE — never "accuracy". Evaluation numbers come
+only from the held-out test set; cross-validation is used only for model
 comparison on the training portion.
 
-Improvements:
-  - **Log1p target transform** for right-skewed demand targets.
-  - **Extra gradient-boosted models** (HistGradientBoosting, LightGBM).
-  - **MAPE / sMAPE** added to the metrics.
-  - **Stacking ensemble** (Ridge meta-learner on top-3 base models).
-  - **Economic features**: margin, price_gap, price_ratio, log transforms,
-    squared terms, cross-features for 90%+ R² accuracy.
+Optimised for web API speed: subsamples large datasets, reduced model
+complexity, and fewer CV folds.
 """
 from __future__ import annotations
 
@@ -24,12 +19,10 @@ import warnings
 import numpy as np
 import pandas as pd
 from sklearn.model_selection import train_test_split, cross_val_score
-from sklearn.linear_model import LinearRegression, Ridge
+from sklearn.linear_model import LinearRegression
 from sklearn.ensemble import (
     GradientBoostingRegressor,
-    HistGradientBoostingRegressor,
     RandomForestRegressor,
-    StackingRegressor,
 )
 from sklearn.metrics import r2_score, mean_absolute_error, mean_squared_error
 
@@ -41,19 +34,14 @@ try:
 except Exception:  # pragma: no cover - optional dependency
     HAS_XGB = False
 
-try:
-    from lightgbm import LGBMRegressor
-    HAS_LGB = True
-except Exception:  # pragma: no cover
-    HAS_LGB = False
-
 RANDOM_SEED = 42
 TEST_SIZE = 0.2
-CV_FOLDS = 5
-LOW_CARDINALITY_CAP = 30  # one-hot columns above this cardinality are dropped
+CV_FOLDS = 3
+LOW_CARDINALITY_CAP = 30
 MAX_FEATURES = 40
 USE_LOG_TARGET = True
-USE_STACKING = True
+USE_STACKING = False
+MAX_TRAIN_ROWS = 15000
 
 
 class PipelineError(ValueError):
@@ -255,47 +243,20 @@ def _build_models():
     models = [
         ("Linear Regression", LinearRegression()),
         ("Random Forest", RandomForestRegressor(
-            n_estimators=100, max_depth=12, min_samples_leaf=3,
+            n_estimators=60, max_depth=8, min_samples_leaf=5,
             random_state=RANDOM_SEED, n_jobs=-1)),
         ("Gradient Boosting", GradientBoostingRegressor(
-            n_estimators=150, learning_rate=0.06, max_depth=5,
-            subsample=0.85, min_samples_leaf=3,
+            n_estimators=80, learning_rate=0.1, max_depth=4,
+            subsample=0.85, min_samples_leaf=5,
             random_state=RANDOM_SEED)),
-        ("Hist Gradient Boosting", HistGradientBoostingRegressor(
-            max_iter=200, learning_rate=0.06, max_depth=7,
-            l2_regularization=0.1, random_state=RANDOM_SEED)),
     ]
     if HAS_XGB:
         models.append(("XGBoost", XGBRegressor(
-            n_estimators=200, learning_rate=0.05, max_depth=6,
-            subsample=0.85, colsample_bytree=0.85,
-            reg_lambda=0.1, min_child_weight=3,
+            n_estimators=80, learning_rate=0.1, max_depth=5,
+            subsample=0.85, colsample_bytree=0.8,
             random_state=RANDOM_SEED, n_jobs=-1,
             objective="reg:squarederror", verbosity=0)))
-    if HAS_LGB:
-        models.append(("LightGBM", LGBMRegressor(
-            n_estimators=200, learning_rate=0.05, num_leaves=63,
-            max_depth=6, subsample=0.85, colsample_bytree=0.85,
-            reg_lambda=0.1, min_child_samples=5,
-            random_state=RANDOM_SEED, n_jobs=-1, verbose=-1)))
     return models
-
-
-def _safe_mape(y_true, y_pred) -> float:
-    yt = np.asarray(y_true, dtype=float)
-    yp = np.asarray(y_pred, dtype=float)
-    mask = yt != 0
-    if not mask.any(): return 0.0
-    return float(np.mean(np.abs((yt[mask] - yp[mask]) / yt[mask])) * 100)
-
-
-def _smape(y_true, y_pred) -> float:
-    yt = np.asarray(y_true, dtype=float)
-    yp = np.asarray(y_pred, dtype=float)
-    denom = np.abs(yt) + np.abs(yp)
-    mask = denom != 0
-    if not mask.any(): return 0.0
-    return float(np.mean(2.0 * np.abs(yp[mask] - yt[mask]) / denom[mask]) * 100)
 
 
 def _feature_importance(model, feature_names, kind: str) -> list[dict]:
@@ -319,6 +280,14 @@ def _feature_importance(model, feature_names, kind: str) -> list[dict]:
 def run_pipeline(df: pd.DataFrame, target: str, features=None) -> dict:
     """Full supervised pipeline; returns the JSON training result."""
     X, y, feature_names, stats, clean_df = prepare_features(df, target, features)
+
+    # Subsample large datasets for speed
+    if len(X) > MAX_TRAIN_ROWS:
+        rng = np.random.RandomState(RANDOM_SEED)
+        idx_sub = rng.choice(len(X), size=MAX_TRAIN_ROWS, replace=False)
+        X = X[idx_sub]
+        y = y[idx_sub]
+        clean_df = clean_df.iloc[idx_sub].copy()
 
     idx = np.arange(len(clean_df))
     idx_train, idx_test = train_test_split(
@@ -348,8 +317,6 @@ def run_pipeline(df: pd.DataFrame, target: str, features=None) -> dict:
         r2 = float(r2_score(y_test, pred))
         mae = float(mean_absolute_error(y_test, pred))
         rmse = float(np.sqrt(mean_squared_error(y_test, pred)))
-        mape = _safe_mape(y_test, pred)
-        smape = _smape(y_test, pred)
 
         # cross-validation on the training portion — subsample for speed
         cv_mean, cv_std = float("nan"), float("nan")
@@ -369,37 +336,12 @@ def run_pipeline(df: pd.DataFrame, target: str, features=None) -> dict:
             "r2": round(r2, 4),
             "mae": round(mae, 3),
             "rmse": round(rmse, 3),
-            "mape": round(mape, 3),
-            "smape": round(smape, 3),
             "cv_r2_mean": round(cv_mean, 4) if cv_mean == cv_mean else None,
             "cv_r2_std": round(cv_std, 4) if cv_std == cv_std else None,
             "training_time_ms": train_ms,
         })
 
-    # --- Stacking ensemble ---
-    if USE_STACKING and len(models) >= 3:
-        try:
-            top3 = sorted(results, key=lambda m: (m["rmse"], -m["r2"]))[:3]
-            top3_idx = [i for i, (n, _) in enumerate(models) if n in {r["name"] for r in top3}]
-            from sklearn.base import clone
-            stack_size = min(2000, len(X_train))
-            stack_idx = np.random.RandomState(RANDOM_SEED).choice(len(X_train), size=stack_size, replace=False)
-            top3_estimators = [(models[idx][0], clone(models[idx][1])) for idx in top3_idx]
-            stacker = StackingRegressor(estimators=top3_estimators,
-                final_estimator=Ridge(alpha=1.0, random_state=RANDOM_SEED), cv=2, n_jobs=-1)
-            t0s = time.perf_counter()
-            stacker.fit(X_train[stack_idx], y_train_t[stack_idx])
-            stack_ms = round((time.perf_counter() - t0s) * 1000)
-            sp = np.clip(inv(stacker.predict(X_test)), 0, None)
-            results.append({"name": "Stacking Ensemble",
-                "r2": round(float(r2_score(y_test, sp)), 4),
-                "mae": round(float(mean_absolute_error(y_test, sp)), 3),
-                "rmse": round(float(np.sqrt(mean_squared_error(y_test, sp))), 3),
-                "mape": round(_safe_mape(y_test, sp), 3),
-                "smape": round(_smape(y_test, sp), 3),
-                "cv_r2_mean": None, "cv_r2_std": None, "training_time_ms": stack_ms})
-        except Exception:
-            pass
+    # --- Stacking ensemble (disabled for speed) ---
 
     # best model: lowest hold-out RMSE (ties broken by R²)
     scored = sorted(results, key=lambda m: (m["rmse"], -m["r2"]))
@@ -465,8 +407,6 @@ def run_pipeline(df: pd.DataFrame, target: str, features=None) -> dict:
             "r2": best_row["r2"],
             "mae": best_row["mae"],
             "rmse": best_row["rmse"],
-            "mape": best_row.get("mape"),
-            "smape": best_row.get("smape"),
             "cv_r2_mean": best_row["cv_r2_mean"],
             "cv_r2_std": best_row["cv_r2_std"],
             "training_time_ms": best_row["training_time_ms"],
@@ -485,9 +425,6 @@ def run_pipeline(df: pd.DataFrame, target: str, features=None) -> dict:
             "mae": "MAE = average absolute error in target units — lower is better.",
             "rmse": "RMSE = root mean squared error in target units — penalises "
                     "large errors more than MAE.",
-            "mape": "MAPE = mean absolute percentage error.",
-            "smape": "sMAPE = symmetric MAPE — bounded 0..100.",
         },
         "xgboost_available": HAS_XGB,
-        "lightgbm_available": HAS_LGB,
     }
