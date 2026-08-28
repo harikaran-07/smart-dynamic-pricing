@@ -41,7 +41,7 @@ LOW_CARDINALITY_CAP = 30
 MAX_FEATURES = 40
 USE_LOG_TARGET = True
 USE_STACKING = False
-MAX_TRAIN_ROWS = 15000
+MAX_TRAIN_ROWS = 5000
 
 
 class PipelineError(ValueError):
@@ -243,16 +243,16 @@ def _build_models():
     models = [
         ("Linear Regression", LinearRegression()),
         ("Random Forest", RandomForestRegressor(
-            n_estimators=60, max_depth=8, min_samples_leaf=5,
+            n_estimators=40, max_depth=6, min_samples_leaf=10,
             random_state=RANDOM_SEED, n_jobs=-1)),
         ("Gradient Boosting", GradientBoostingRegressor(
-            n_estimators=80, learning_rate=0.1, max_depth=4,
-            subsample=0.85, min_samples_leaf=5,
+            n_estimators=50, learning_rate=0.1, max_depth=4,
+            subsample=0.85, min_samples_leaf=10,
             random_state=RANDOM_SEED)),
     ]
     if HAS_XGB:
         models.append(("XGBoost", XGBRegressor(
-            n_estimators=80, learning_rate=0.1, max_depth=5,
+            n_estimators=50, learning_rate=0.1, max_depth=4,
             subsample=0.85, colsample_bytree=0.8,
             random_state=RANDOM_SEED, n_jobs=-1,
             objective="reg:squarederror", verbosity=0)))
@@ -321,7 +321,7 @@ def run_pipeline(df: pd.DataFrame, target: str, features=None) -> dict:
         # cross-validation on the training portion — subsample for speed
         cv_mean, cv_std = float("nan"), float("nan")
         try:
-            cv_size = min(3000, len(X_train))
+            cv_size = min(1000, len(X_train))
             cv_idx = np.random.RandomState(RANDOM_SEED).choice(
                 len(X_train), size=cv_size, replace=False)
             cv_X, cv_y = X_train[cv_idx], y_train[cv_idx]
