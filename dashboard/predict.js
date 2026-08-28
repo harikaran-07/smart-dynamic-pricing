@@ -32,7 +32,7 @@
     .pp-step.done .n{background:rgba(52,211,153,.16);color:var(--ok);border-color:rgba(52,211,153,.4)}
     .pp-step.active{color:var(--txt)}
     .pp-step.active .n{background:linear-gradient(135deg,var(--acc),var(--acc-2));color:#fff;border:0}
-    .pp-step .a{font-size:10.5px;color:var(--faint);font-weight:500}
+    .pp-step .a{font-size:11px;color:var(--faint);font-weight:500}
     .pp-arr{color:var(--line);margin:0 10px;font-size:13px}
     .pp-modes{display:flex;gap:6px;padding:14px 18px;border-bottom:1px solid var(--line);flex-wrap:wrap}
     .pp-mode{padding:9px 18px;border-radius:10px;background:#0c1220;border:1px solid var(--line);
@@ -53,7 +53,7 @@
     .pp-kpi .v{font-size:21px;font-weight:800;margin-top:5px}
     .pp-kpi .v.ok{color:var(--ok)} .pp-kpi .v.bad{color:var(--bad)} .pp-kpi .v.warn{color:var(--warn)}
     .pp-kpi .s{font-size:11px;color:var(--faint);margin-top:3px}
-    .pp-table{width:100%;border-collapse:collapse;font-size:12.5px;margin-top:8px}
+    .pp-table{width:100%;border-collapse:collapse;font-size:13px;margin-top:8px}
     .pp-table th,.pp-table td{border:1px solid var(--line);padding:7px 9px;text-align:left;white-space:nowrap}
     .pp-table th{background:#0c1220;color:var(--acc);font-size:11px;text-transform:uppercase;letter-spacing:.4px}
     .pp-table td{color:var(--mut)} .pp-table td b{color:var(--txt)}
@@ -63,7 +63,7 @@
     .pp-chart canvas{height:100%;width:100%}
     .pp-reasons{margin-top:14px;display:grid;gap:8px}
     .pp-reason{display:flex;gap:10px;align-items:flex-start;padding:10px 12px;border-radius:10px;
-      background:rgba(91,140,255,.06);border:1px solid rgba(91,140,255,.16);font-size:12.5px;color:var(--mut);line-height:1.5}
+      background:rgba(91,140,255,.06);border:1px solid rgba(91,140,255,.16);font-size:13px;color:var(--mut);line-height:1.5}
     .pp-reason .ic{flex:none;width:24px;height:24px;border-radius:8px;display:grid;place-items:center;
       font-weight:800;font-size:13px}
     .pp-reason.up .ic{background:rgba(52,211,153,.16);color:var(--ok)}
@@ -78,7 +78,7 @@
     .pp-err{margin-top:12px;padding:12px;border-radius:10px;background:rgba(248,113,113,.1);
       border:1px solid rgba(248,113,113,.3);color:var(--bad);font-size:13px}
     .pp-meta{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:12px}
-    .pp-chip{font-size:11.5px;padding:6px 11px;border-radius:999px;border:1px solid var(--line);
+    .pp-chip{font-size:12px;padding:6px 11px;border-radius:999px;border:1px solid var(--line);
       background:#0c1220;color:var(--mut);font-weight:600}
     .pp-chip b{color:var(--txt)}
     .pp-chip.warn{color:var(--warn);border-color:rgba(251,191,36,.35)}
@@ -91,7 +91,7 @@
     .pp-btn.ghost{background:#0c1220;border:1px solid var(--line);color:var(--txt);box-shadow:none}
     .pp-actions{display:flex;gap:10px;flex-wrap:wrap;margin-top:14px}
     .pp-form{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:12px}
-    .pp-form label{font-size:11.5px;margin:0 0 5px;color:var(--mut);font-weight:600}
+    .pp-form label{font-size:12px;margin:0 0 5px;color:var(--mut);font-weight:600}
     .pp-form input,.pp-form select{width:100%}
     @media (max-width:560px){.pp-step .a{display:none}.pp-arr{margin:0 6px}}
     `;
@@ -178,16 +178,15 @@
     wrap.appendChild(dsCard);
 
     /* ML model card */
-    var m = a.model;
-    var tourHtml = "";
+    var m = a.model;      var tourHtml = "";
     if (m.tournament && m.tournament.length) {
-      tourHtml = '<div style="margin-top:14px;"><h5 style="margin:0 0 6px;font-size:13px;color:var(--txt)">Model Tournament Results</h5>' +
+      tourHtml = '<div style="margin-top:14px;"><h4 style="margin:0 0 6px;font-size:13px;color:var(--txt)">Model Tournament Results</h4>' +
         '<div class="pp-scroll"><table class="pp-table"><thead><tr><th>Model</th><th>Hold-out R²</th><th>MAE</th><th>RMSE</th><th>Status</th></tr></thead><tbody>' +
         m.tournament.map(function (tm) {
           var isBest = tm.isBest;
           return '<tr' + (isBest ? ' style="background:rgba(91,140,255,0.12);font-weight:700"' : '') + '><td><b>' + esc(tm.name) + '</b></td><td>' +
             fmt(tm.r2, 3) + '</td><td>' + fmt(tm.mae, 2) + '</td><td>' + fmt(tm.rmse, 2) + '</td><td>' +
-            (isBest ? '<span class="pp-chip" style="color:var(--ok);border-color:rgba(52,211,153,.35);padding:2px 8px;font-size:10px">BEST</span>' : '<span style="color:var(--faint);font-size:11px">Evaluated</span>') + '</td></tr>';
+            (isBest ? '<span class="pp-chip" style="color:var(--ok);border-color:rgba(52,211,153,.35);padding:2px 8px;font-size:11px">BEST</span>' : '<span style="color:var(--faint);font-size:12px">Evaluated</span>') + '</td></tr>';
         }).join("") + '</tbody></table></div></div>';
     }
 

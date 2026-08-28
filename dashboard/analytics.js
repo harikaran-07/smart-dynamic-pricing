@@ -23,11 +23,11 @@
       padding:12px 16px;border-bottom:1px solid var(--line);background:rgba(8,12,24,.35)}
     .px-tabs{display:flex;flex-wrap:wrap;gap:4px}
     .px-tab{padding:8px 14px;border-radius:9px;border:1px solid transparent;background:transparent;
-      color:var(--mut);font-size:12.5px;font-weight:700;cursor:pointer;margin:0;width:auto;box-shadow:none}
+      color:var(--mut);font-size:13px;font-weight:700;cursor:pointer;margin:0;width:auto;box-shadow:none}
     .px-tab:hover{color:var(--txt);background:rgba(91,140,255,.08)}
     .px-tab.active{color:var(--txt);border-color:var(--line);background:#0c1220}
     .px-actions{display:flex;gap:8px;flex-wrap:wrap}
-    .px-btn{margin:0;width:auto;padding:9px 14px;border-radius:9px;font-size:12.5px;font-weight:700;
+    .px-btn{margin:0;width:auto;padding:9px 14px;border-radius:9px;font-size:13px;font-weight:700;
       background:#0c1220;border:1px solid var(--line);color:var(--txt);box-shadow:none;cursor:pointer}
     .px-btn:hover{filter:none;border-color:var(--acc);color:var(--acc)}
     .px-btn.px-primary{background:linear-gradient(135deg,var(--acc),var(--acc-2));border:0;color:#fff}
@@ -50,7 +50,7 @@
       border:1px solid rgba(91,140,255,.2);font-size:13px;line-height:1.65;color:var(--mut)}
     .px-summary b{color:var(--txt)}
     .px-chips{display:flex;flex-wrap:wrap;gap:8px;margin:10px 0 4px}
-    .px-chip{font-size:11.5px;padding:6px 11px;border-radius:999px;border:1px solid var(--line);
+    .px-chip{font-size:12px;padding:6px 11px;border-radius:999px;border:1px solid var(--line);
       background:#0c1220;color:var(--mut);font-weight:600}
     .px-chip b{color:var(--txt)}
     .px-chip.hi{color:var(--ok);border-color:rgba(52,211,153,.35)}
@@ -341,7 +341,7 @@
   /* ---------------- shared chrome ---------------- */
   function kpi(k, v, s) {
     return '<div class="px-kpi"><div class="k">' + k + '</div><div class="v">' + v + '</div>' +
-      (s ? '<div class="sub" style="font-size:10.5px;color:var(--faint);margin:2px 0 0">' + s + '</div>' : "") + '</div>';
+      (s ? '<div class="sub" style="font-size:11px;color:var(--faint);margin:2px 0 0">' + s + '</div>' : "") + '</div>';
   }
 
   /* ---------------- Dataset tab (analytics + model) ---------------- */

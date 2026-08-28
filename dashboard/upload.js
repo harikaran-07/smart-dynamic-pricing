@@ -15,8 +15,8 @@
   function css() {
     var s = document.createElement("style");
     s.textContent = `
-    .ds-select{width:auto;min-width:150px;margin:0;padding:8px 12px;font-size:12.5px;cursor:pointer}
-    .ds-badge{font-size:11.5px;color:var(--ok);border:1px solid rgba(52,211,153,.35);border-radius:999px;
+    .ds-select{width:auto;min-width:150px;margin:0;padding:8px 12px;font-size:13px;cursor:pointer}
+    .ds-badge{font-size:13px;color:var(--ok);border:1px solid rgba(52,211,153,.35);border-radius:999px;
       padding:5px 11px;font-weight:700;display:none;align-items:center;gap:6px;max-width:200px;
       overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
     .toast-wrap{position:fixed;top:74px;right:18px;z-index:99999;display:flex;flex-direction:column;gap:10px;max-width:340px}
@@ -38,7 +38,7 @@
     .px-modal-box{background:linear-gradient(180deg,var(--card),var(--card-2));border:1px solid var(--line);
       border-radius:var(--rad);box-shadow:var(--shadow);width:100%;max-width:780px;padding:22px;position:relative}
     .px-modal-box h3{margin:0 0 6px;font-size:17px}
-    .px-modal-box .sub{font-size:12.5px;color:var(--faint);margin:0 0 16px}
+    .px-modal-box .sub{font-size:13px;color:var(--faint);margin:0 0 16px}
     .px-x{position:absolute;top:14px;right:16px;background:none;border:0;color:var(--faint);font-size:22px;
       cursor:pointer;width:auto;margin:0;box-shadow:none;padding:4px}
     .px-x:hover{color:var(--bad);filter:none}
@@ -59,9 +59,9 @@
     .px-mapgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:10px;margin-top:16px}
     .px-mapgrid label{font-size:11px;margin:0 0 4px}
     .px-mapgrid label b{color:var(--txt)} .px-mapgrid label.need{color:var(--bad)}
-    .px-mapgrid select{padding:8px 10px;font-size:12.5px}
+    .px-mapgrid select{padding:8px 10px;font-size:13px}
     .px-error{margin-top:14px;padding:11px 13px;border-radius:10px;background:rgba(248,113,113,.1);
-      border:1px solid rgba(248,113,113,.35);color:var(--bad);font-size:12.5px;display:none;line-height:1.6}
+      border:1px solid rgba(248,113,113,.35);color:var(--bad);font-size:13px;display:none;line-height:1.6}
     .px-error.show{display:block}
     .px-modal-actions{display:flex;gap:10px;justify-content:flex-end;margin-top:18px}
     .px-modal-actions button{width:auto;margin:0;padding:11px 20px}
