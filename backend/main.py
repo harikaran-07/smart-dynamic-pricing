@@ -76,6 +76,7 @@ def health():
     return {
         "status": "ok",
         "service": "smart-pricing-api",
+        "models_ready": True,
         "ml": {
             "linear": True,
             "xgboost": pl.HAS_XGB,
