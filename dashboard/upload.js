@@ -37,13 +37,13 @@
     .px-modal.show{display:flex}
     .px-modal-box{background:linear-gradient(180deg,var(--card),var(--card-2));border:1px solid var(--line);
       border-radius:var(--rad);box-shadow:var(--shadow);width:100%;max-width:780px;padding:22px;position:relative}
-    .px-modal-box h3{margin:0 0 6px;font-size:17px}
+    .px-modal-box h3{margin:0 0 6px;font-size:20px}
     .px-modal-box .sub{font-size:13px;color:var(--faint);margin:0 0 16px}
-    .px-x{position:absolute;top:14px;right:16px;background:none;border:0;color:var(--faint);font-size:22px;
+    .px-x{position:absolute;top:14px;right:16px;background:none;border:0;color:var(--faint);font-size:20px;
       cursor:pointer;width:auto;margin:0;box-shadow:none;padding:4px}
     .px-x:hover{color:var(--bad);filter:none}
     .px-drop{border:2px dashed var(--line);border-radius:12px;padding:30px 20px;text-align:center;color:var(--mut);
-      font-size:13.5px;cursor:pointer;transition:.15s;background:rgba(8,12,24,.4)}
+      font-size:13px;cursor:pointer;transition:.15s;background:rgba(8,12,24,.4)}
     .px-drop:hover,.px-drop.over{border-color:var(--acc);color:var(--txt)}
     .px-drop b{color:var(--acc)}
     .px-progress{display:none;margin-top:14px}

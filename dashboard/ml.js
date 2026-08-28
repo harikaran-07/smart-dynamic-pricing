@@ -92,9 +92,9 @@
       var isBest = m.name === bestName;
       return "<tr" + (isBest ? " class='ml-best'" : "") + "><td>" + esc(m.name) + (isBest ? " <span class='badge'>BEST</span>" : "") +
         "</td><td>" + fmt(m.r2, 4) + "</td><td>" + fmt(m.mae, 2) + "</td><td>" + fmt(m.rmse, 2) +
-        "</td><td>CV R\u00B2 " + fmt(m.cv_r2_mean, 3) + " \u00B1 " + fmt(m.cv_r2_std, 3) + "</td></tr>";
+        "</td><td>Cross-val R\u00B2 " + fmt(m.cv_r2_mean, 3) + " \u00B1 " + fmt(m.cv_r2_std, 3) + "</td></tr>";
     }).join("");
-    return '<table class="ml-table"><thead><tr><th>Model</th><th>R\u00B2</th><th>MAE</th><th>RMSE</th><th>5-fold CV</th></tr></thead><tbody>' + rows + "</tbody></table>";
+    return '<table class="ml-table"><thead><tr><th>Model</th><th>R\u00B2</th><th>MAE</th><th>RMSE</th><th>5-fold cross-val</th></tr></thead><tbody>' + rows + "</tbody></table>";
   }
 
   function featureImportanceChart(imp) {

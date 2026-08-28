@@ -31,12 +31,13 @@
       background:#0c1220;border:1px solid var(--line);color:var(--txt);box-shadow:none;cursor:pointer}
     .px-btn:hover{filter:none;border-color:var(--acc);color:var(--acc)}
     .px-btn.px-primary{background:linear-gradient(135deg,var(--acc),var(--acc-2));border:0;color:#fff}
+    /* .px-btn merges into base button where possible */
     .px-content{padding:18px}
     .px-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(330px,1fr));gap:16px}
     .px-card{background:linear-gradient(180deg,var(--card),var(--card-2));border:1px solid var(--line);
       border-radius:var(--rad);padding:18px;position:relative}
     .px-card.wide{grid-column:1/-1}
-    .px-card h3,.px-card h4{margin:0 0 4px;font-size:14.5px;font-weight:700}
+    .px-card h3{margin:0 0 4px;font-size:14px;font-weight:700}
     .px-card .sub{font-size:12px;color:var(--faint);margin:0 0 12px}
     .px-chart{height:250px;margin-top:6px}
     .px-chart.tall{height:280px}
@@ -44,7 +45,7 @@
     .px-kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:10px;margin:12px 0}
     .px-kpi{background:#0c1220;border:1px solid var(--line);border-radius:10px;padding:10px 12px}
     .px-kpi .k{font-size:11px;color:var(--faint)}
-    .px-kpi .v{font-size:18px;font-weight:750;margin-top:3px}
+    .px-kpi .v{font-size:17px;font-weight:750;margin-top:3px}
     .px-kpi .v.ok{color:var(--ok)} .px-kpi .v.bad{color:var(--bad)}
     .px-summary{margin-top:12px;padding:12px 14px;border-radius:10px;background:rgba(91,140,255,.07);
       border:1px solid rgba(91,140,255,.2);font-size:13px;line-height:1.65;color:var(--mut)}
@@ -83,7 +84,7 @@
   function chartCard(title, sub, id, tall) {
     var card = el(
       '<div class="px-card">' +
-      '<h4>' + title + '</h4><p class="sub">' + sub + '</p>' +
+      '<h3>' + title + '</h3><p class="sub">' + sub + '</p>' +
       '<div class="px-chart' + (tall ? " tall" : "") + '"><canvas></canvas></div></div>');
     return card;
   }
@@ -140,7 +141,7 @@
     var hiP = byProfit[0], loP = byProfit[byProfit.length - 1];
     var hiR = byRevenue[0], loR = byRevenue[byRevenue.length - 1];
 
-    var highlights = el('<div class="px-card wide"><h4>Profit &amp; Revenue Leaders</h4><div class="px-chips">' +
+    var highlights = el('<div class="px-card wide"><h3>Profit &amp; Revenue Leaders</h3><div class="px-chips">' +
       chip("Highest profit product", hiP.product_id + " (" + money(hiP.profit) + ")", "hi") +
       chip("Lowest profit product", loP.product_id + " (" + money(loP.profit) + ")", "lo") +
       chip("Highest revenue product", hiR.product_id + " (" + money(hiR.revenue) + ")", "hi") +
@@ -204,7 +205,7 @@
 
     var ms = monthSeries(a.monthly_sales);
     var seasons = a.seasons;
-    var chips = el('<div class="px-card wide"><h4>Seasonal Signals</h4><div class="px-chips">' +
+    var chips = el('<div class="px-card wide"><h3>Seasonal Signals</h3><div class="px-chips">' +
       chip("Best season", a.best_season + " (" + fmt(seasons[a.best_season]) + " units)", "hi") +
       chip("Worst season", a.worst_season + " (" + fmt(seasons[a.worst_season]) + " units)", "lo") +
       chip("Best month", M[+a.best_month - 1] + " (" + fmt(a.monthly_sales[a.best_month]) + ")", "hi") +
@@ -282,7 +283,7 @@
     var invData = invList.map(function (i) { return i.inventory; });
     var hiInv = invList[0], loInv = invList[invList.length - 1];
 
-    var chips = el('<div class="px-card wide"><h4>Inventory Health</h4><div class="px-chips">' +
+    var chips = el('<div class="px-card wide"><h3>Inventory Health</h3><div class="px-chips">' +
       chip("Highest stock", hiInv.product_id + " (" + fmt(hiInv.inventory) + " units)", "hi") +
       chip("Lowest stock", loInv.product_id + " (" + fmt(loInv.inventory) + " units)", "lo") +
       (a.low_stock.length ? chip("Sell-out risk", a.low_stock.map(function (x) { return x.product_id + " (" + x.days_left + "d)"; }).join(", "), "lo") : "") +
@@ -501,7 +502,7 @@
     d.className = "px-empty";
     d.innerHTML =
       '<div class="px-empty-box" style="text-align:center">' +
-      '<h4>No dataset loaded</h4>' +
+      '<h3>No dataset loaded</h3>' +
       '<p>Upload a CSV or Excel file with the <b>Upload Dataset</b> button to see analytics, revenue and pricing insights here.</p>' +
       '<button type="button" class="px-btn px-primary" style="margin:14px auto 0;display:block" onclick="PricingUI&amp;&amp;PricingUI.openModal&amp;&amp;PricingUI.openModal()">&#8593; Upload Dataset</button>' +
       '</div>';
