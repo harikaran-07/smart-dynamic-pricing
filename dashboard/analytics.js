@@ -22,16 +22,9 @@
     .px-toolbar{display:flex;flex-wrap:wrap;gap:10px;align-items:center;justify-content:space-between;
       padding:12px 16px;border-bottom:1px solid var(--line);background:rgba(8,12,24,.35)}
     .px-tabs{display:flex;flex-wrap:wrap;gap:4px}
-    .px-tab{padding:8px 14px;border-radius:9px;border:1px solid transparent;background:transparent;
-      color:var(--mut);font-size:13px;font-weight:700;cursor:pointer;margin:0;width:auto;box-shadow:none}
-    .px-tab:hover{color:var(--txt);background:rgba(91,140,255,.08)}
-    .px-tab.active{color:var(--txt);border-color:var(--line);background:#0c1220}
+    /* .px-tab → .mode-btn (shared with predict.js) */
     .px-actions{display:flex;gap:8px;flex-wrap:wrap}
-    .px-btn{margin:0;width:auto;padding:9px 14px;border-radius:9px;font-size:13px;font-weight:700;
-      background:#0c1220;border:1px solid var(--line);color:var(--txt);box-shadow:none;cursor:pointer}
-    .px-btn:hover{filter:none;border-color:var(--acc);color:var(--acc)}
-    .px-btn.px-primary{background:linear-gradient(135deg,var(--acc),var(--acc-2));border:0;color:#fff}
-    /* .px-btn merges into base button where possible */
+    /* .px-btn → btn-secondary, .px-btn.px-primary → base button */
     .px-content{padding:18px}
     .px-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(330px,1fr));gap:16px}
     .px-card{background:linear-gradient(180deg,var(--card),var(--card-2));border:1px solid var(--line);
@@ -64,7 +57,7 @@
     .px-err{margin-top:12px;padding:12px;border-radius:10px;background:rgba(248,113,113,.1);
       border:1px solid rgba(248,113,113,.3);color:var(--bad);font-size:13px}
     @media (max-width:560px){.px-toolbar{flex-direction:column;align-items:stretch}.px-actions{width:100%}
-      .px-actions .px-btn{flex:1}}
+      .px-actions button{flex:1}}
     `;
     document.head.appendChild(s);
   }
@@ -504,7 +497,7 @@
       '<div class="px-empty-box" style="text-align:center">' +
       '<h3>No dataset loaded</h3>' +
       '<p>Upload a CSV or Excel file with the <b>Upload Dataset</b> button to see analytics, revenue and pricing insights here.</p>' +
-      '<button type="button" class="px-btn px-primary" style="margin:14px auto 0;display:block" onclick="PricingUI&amp;&amp;PricingUI.openModal&amp;&amp;PricingUI.openModal()">&#8593; Upload Dataset</button>' +
+      '<button type="button" class="ds-upload-btn" style="margin:14px auto 0;display:block" onclick="PricingUI&amp;&amp;PricingUI.openModal&amp;&amp;PricingUI.openModal()">&#8593; Upload Dataset</button>' +
       '</div>';
     return d;
   }
@@ -547,16 +540,16 @@
       '<div class="px-panel">' +
       '<div class="px-toolbar">' +
       '<div class="px-tabs">' +
-      '<button class="px-tab active" data-tab="overview">Overview</button>' +
-      '<button class="px-tab" data-tab="dataset">Dataset</button>' +
-      '<button class="px-tab" data-tab="pricing">Pricing</button>' +
-      '<button class="px-tab" data-tab="profit">Profit</button>' +
-      '<button class="px-tab" data-tab="seasonal">Seasonal</button>' +
-      '<button class="px-tab" data-tab="inventory">Inventory &amp; Stock</button>' +
+      '<button class="mode-btn active" data-tab="overview">Overview</button>' +
+      '<button class="mode-btn" data-tab="dataset">Dataset</button>' +
+      '<button class="mode-btn" data-tab="pricing">Pricing</button>' +
+      '<button class="mode-btn" data-tab="profit">Profit</button>' +
+      '<button class="mode-btn" data-tab="seasonal">Seasonal</button>' +
+      '<button class="mode-btn" data-tab="inventory">Inventory &amp; Stock</button>' +
       '</div>' +
       '<div class="px-actions">' +
-      '<button class="px-btn" id="px-refresh">Refresh Model</button>' +
-      '<button class="px-btn px-primary" id="px-export">Export Predictions (CSV)</button>' +
+      '<button class="btn-secondary" id="px-refresh">Refresh Model</button>' +
+      '<button id="px-export">Export Predictions (CSV)</button>' +
       '</div></div>' +
       '<div class="px-content" id="px-content"></div>' +
       '<div class="px-row" style="padding:0 18px 18px">' +
@@ -584,9 +577,9 @@
       root.PricingUI && root.PricingUI.toast("Export ready", "Predictions CSV downloaded (" + e.name + ").", "ok");
     };
 
-    panel.querySelectorAll(".px-tab").forEach(function (b) {
+    panel.querySelectorAll(".mode-btn").forEach(function (b) {
       b.onclick = function () {
-        panel.querySelectorAll(".px-tab").forEach(function (x) { x.classList.remove("active"); });
+        panel.querySelectorAll(".mode-btn").forEach(function (x) { x.classList.remove("active"); });
         b.classList.add("active");
         state.tab = b.getAttribute("data-tab");
         renderTab(state.tab);

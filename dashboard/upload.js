@@ -136,7 +136,7 @@
       '<div class="px-preview" id="px-preview"><b style="font-size:13px">Preview</b> <span style="color:var(--faint);font-size:12px" id="px-preview-meta"></span><div style="overflow:auto;max-height:240px"><table><thead id="px-preview-head"></thead><tbody id="px-preview-body"></tbody></table></div>' +
       '<div class="px-mapgrid" id="px-mapgrid"><div class="px-mapgrid-title" style="grid-column:1/-1;font-size:13px;font-weight:700;margin-top:6px">Column mapping <span style="font-weight:400;color:var(--faint);font-size:12px">— required fields are highlighted</span></div></div></div>' +
       '<div class="px-modal-actions">' +
-      '<button id="px-cancel" style="background:#0c1220;border:1px solid var(--line);color:var(--txt);box-shadow:none">Cancel</button>' +
+      '<button id="px-cancel" class="btn-secondary">Cancel</button>' +
       '<button id="px-apply" disabled>Analyze &amp; Use Dataset</button>' + +
       '</div></div>';
     document.body.appendChild(m);

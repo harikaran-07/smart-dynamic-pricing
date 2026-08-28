@@ -35,11 +35,7 @@
     .pp-step .a{font-size:11px;color:var(--faint);font-weight:500}
     .pp-arr{color:var(--line);margin:0 10px;font-size:13px}
     .pp-modes{display:flex;gap:6px;padding:14px 18px;border-bottom:1px solid var(--line);flex-wrap:wrap}
-    .pp-mode{padding:9px 18px;border-radius:10px;background:#0c1220;border:1px solid var(--line);
-      color:var(--mut);font-size:13px;font-weight:700;cursor:pointer;margin:0;width:auto;box-shadow:none}
-    .pp-mode:hover{color:var(--txt);border-color:var(--acc)}
-    .pp-mode.active{background:linear-gradient(135deg,var(--acc),var(--acc-2));color:#fff;border:0}
-    /* pp-mode merges into mode-btn where possible */
+    /* .pp-mode → .mode-btn (shared with analytics.js) */
     .pp-body{padding:18px}
     .pp-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(330px,1fr));gap:16px}
     .pp-card{background:linear-gradient(180deg,var(--card),var(--card-2));border:1px solid var(--line);
@@ -85,11 +81,7 @@
     .pp-chip.warn{color:var(--warn);border-color:rgba(251,191,36,.35)}
     .pp-empty{padding:26px;text-align:center;color:var(--faint);font-size:13px;border:1px dashed var(--line);
       border-radius:12px;margin-top:8px}
-    .pp-btn{margin:0;width:auto;padding:11px 20px;border-radius:10px;font-size:13px;font-weight:700;
-      background:linear-gradient(135deg,var(--acc),var(--acc-2));color:#fff;border:0;cursor:pointer;
-      box-shadow:0 8px 20px rgba(91,140,255,.3)}
-    .pp-btn:hover{filter:brightness(1.08)}
-    .pp-btn.ghost{background:#0c1220;border:1px solid var(--line);color:var(--txt);box-shadow:none}
+    /* .pp-btn → base button, .pp-btn.ghost → btn-secondary */
     .pp-actions{display:flex;gap:10px;flex-wrap:wrap;margin-top:14px}
     .pp-form{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:12px}
     .pp-form label{font-size:12px;margin:0 0 5px;color:var(--mut);font-weight:600}
@@ -218,8 +210,8 @@
       '<div class="pp-scroll"><table class="pp-table"><thead><tr>' +
       ['Product', 'Category', 'Base price', 'Recommended', 'Change', 'Expected revenue'].map(function (h) { return '<th>' + h + '</th>'; }).join("") +
       '</tr></thead><tbody>' + tableHtml + '</tbody></table></div>' +
-      '<div class="pp-actions"><button class="pp-btn" id="pp-export">Download Predictions (CSV)</button>' +
-      '<button class="pp-btn ghost" id="pp-refresh">Retrain Model</button></div></div>');
+      '<div class="pp-actions"><button id="pp-export">Download Predictions (CSV)</button>' +
+      '<button class="btn-secondary" id="pp-refresh">Retrain Model</button></div></div>');
     wrap.appendChild(predCard);
 
     /* actual vs recommended chart */
@@ -340,7 +332,7 @@
     var formCard = el('<div class="pp-card"><h4>Manual Input</h4>' +
       '<p class="sub">Enter product details to get a price recommendation — works independently of any uploaded dataset.</p>' +
       manualForm() +
-      '<div class="pp-actions"><button class="pp-btn" id="pp-predict">Predict Price</button></div>' +
+      '<div class="pp-actions"><button id="pp-predict">Predict Price</button></div>' +
       '<div class="pp-err" id="pp-manual-err" style="display:none"></div></div>');
     var resultCard = el('<div class="pp-card"><h4>Prediction Dashboard</h4>' +
       '<p class="sub">KPI results appear here after you press Predict Price.</p>' +
@@ -403,16 +395,16 @@
       '<div class="pp-panel">' +
       '<div id="pp-steps"></div>' +
       '<div class="pp-modes">' +
-      '<button class="pp-mode active" data-mode="dataset">Dataset Mode</button>' +
-      '<button class="pp-mode" data-mode="manual">Manual Mode</button>' +
+      '<button class="mode-btn active" data-mode="dataset">Dataset Mode</button>' +
+      '<button class="mode-btn" data-mode="manual">Manual Mode</button>' +
       '</div>' +
       '<div class="pp-body"><div id="pp-content"></div></div>' +
       '</div>');
     host.appendChild(panel);
 
-    panel.querySelectorAll(".pp-mode").forEach(function (b) {
+    panel.querySelectorAll(".mode-btn").forEach(function (b) {
       b.onclick = function () {
-        panel.querySelectorAll(".pp-mode").forEach(function (x) { x.classList.remove("active"); });
+        panel.querySelectorAll(".mode-btn").forEach(function (x) { x.classList.remove("active"); });
         b.classList.add("active");
         state.mode = b.getAttribute("data-mode");
         renderSteps();

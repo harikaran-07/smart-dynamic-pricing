@@ -239,7 +239,7 @@
     var row = rows.filter(function (r) { return r.product_id === prodId; }).pop() || rows[0];
     if (!row) { showErr(out, "No dataset rows available."); return; }
     var payload = { dataset_id: BACKEND.datasetId, objective: obj, row: row };
-    var btn = out.closest(".ml-price").querySelector(".ml-btn");
+    var btn = out.closest(".ml-price").querySelector("button");
     btn.disabled = true; btn.textContent = "Optimising\u2026";
     root.PricingUI.spinner(true);
     fetch((window.API_BASE || "") + "/api/pricing/recommend", {
@@ -294,7 +294,7 @@
       '<div class="ml-grid2"><div class="ml-col">' +
       "<label>Product</label><select id='ml-up-price-prod'></select>" +
       "<label>Objective</label><select id='ml-up-price-obj'><option value='revenue'>Maximise revenue</option><option value='profit'>Maximise profit</option></select>" +
-      '<button id="ml-up-price-run" class="ml-btn">Recommend price</button>' +
+      '<button id="ml-up-price-run">Recommend price</button>' +
       "</div><div class='ml-col'><div id='ml-up-price-out' class='result empty'>Recommend a price to see why this price.</div></div></div>";
     rootEl.innerHTML = "";
     rootEl.appendChild(host);
@@ -338,11 +338,11 @@
     '<div class="ml-empty" style="padding:16px">Upload a CSV dataset to run the ML pipeline: ' +
     "the backend compares Linear Regression, Random Forest, Gradient Boosting and XGBoost " +
     "(5-fold cross-validation + hold-out metrics) and drives rule-constrained price recommendations. " +
-    '<button type="button" class="ml-upload-btn" onclick="PricingUI&amp;&amp;PricingUI.openModal&amp;&amp;PricingUI.openModal()">&#8593; Upload Dataset</button></div>';
+    '<button type="button" class="ds-upload-btn" onclick="PricingUI&amp;&amp;PricingUI.openModal&amp;&amp;PricingUI.openModal()">&#8593; Upload Dataset</button></div>';
 
   var EMPTY_PRICE =
     '<div class="ml-empty" style="padding:16px">Upload a dataset to get rule-constrained price recommendations with reliability scores. ' +
-    '<button type="button" class="ml-upload-btn" onclick="PricingUI&amp;&amp;PricingUI.openModal&amp;&amp;PricingUI.openModal()">&#8593; Upload Dataset</button></div>';
+    '<button type="button" class="ds-upload-btn" onclick="PricingUI&amp;&amp;PricingUI.openModal&amp;&amp;PricingUI.openModal()">&#8593; Upload Dataset</button></div>';
 
   function render() {
     P = root.PricingData;
