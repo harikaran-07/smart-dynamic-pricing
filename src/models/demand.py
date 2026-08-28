@@ -32,7 +32,9 @@ FEATURES = [
     "price", "competitor_price", "price_vs_competitor", "price_ratio_to_base",
     "price_over_cat", "inventory", "is_weekend", "month",
     "year_sin", "year_cos", "seasonal_factor", "weather_factor",
-    "units_lag1", "units_lag7", "units_roll7",
+    "units_lag1", "units_lag2", "units_lag3", "units_lag7", "units_lag14",
+    "units_roll7", "units_roll14", "price_change_1", "price_change_7",
+    "promo", "state_holiday", "school_holiday",
 ]
 
 
@@ -56,24 +58,24 @@ def make_pipelines() -> dict[str, Pipeline]:
     if XGB_AVAILABLE:
         models["xgboost"] = Pipeline([
             ("reg", XGBRegressor(
-                n_estimators=500, learning_rate=0.04, max_depth=8,
-                subsample=0.85, colsample_bytree=0.8,
-                reg_alpha=0.1, reg_lambda=1.0,
+                n_estimators=1000, learning_rate=0.025, max_depth=12,
+                subsample=0.9, colsample_bytree=0.9,
+                reg_alpha=0.05, reg_lambda=0.8,
                 random_state=42, n_jobs=-1, verbosity=0)),
         ])
     if LGB_AVAILABLE:
         models["lightgbm"] = Pipeline([
             ("reg", LGBMRegressor(
-                n_estimators=500, learning_rate=0.04, max_depth=8,
-                subsample=0.85, colsample_bytree=0.8,
-                reg_alpha=0.1, reg_lambda=1.0,
+                n_estimators=1000, learning_rate=0.025, max_depth=12,
+                subsample=0.9, colsample_bytree=0.9,
+                reg_alpha=0.05, reg_lambda=0.8,
                 random_state=42, n_jobs=-1, verbosity=-1)),
         ])
     if CB_AVAILABLE:
         models["catboost"] = Pipeline([
             ("reg", CatBoostRegressor(
-                iterations=500, learning_rate=0.04, depth=8,
-                l2_leaf_reg=3.0, random_seed=42, verbose=0)),
+                iterations=1000, learning_rate=0.025, depth=12,
+                l2_leaf_reg=2.0, random_seed=42, verbose=0)),
         ])
     return models
 

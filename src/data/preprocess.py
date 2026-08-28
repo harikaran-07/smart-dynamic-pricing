@@ -192,11 +192,26 @@ def engineer_sales_features(df: pd.DataFrame) -> pd.DataFrame:
     d = d.sort_values(["product_id", "date"])
     g = d.groupby("product_id")["units_sold"]
     d["units_lag1"] = g.shift(1)
+    d["units_lag2"] = g.shift(2)
+    d["units_lag3"] = g.shift(3)
     d["units_lag7"] = g.shift(7)
+    d["units_lag14"] = g.shift(14)
     d["units_roll7"] = g.shift(1).transform(lambda s: s.rolling(7, min_periods=1).mean())
+    d["units_roll14"] = g.shift(1).transform(lambda s: s.rolling(14, min_periods=1).mean())
+    # price change features
+    d["price_lag1"] = d.groupby("product_id")["price"].shift(1)
+    d["price_change_1"] = d["price"] - d["price_lag1"]
+    d["price_change_7"] = d["price"] - d.groupby("product_id")["price"].shift(7)
+
+    # carry Rossmann promo/holiday flags as features (0 if missing)
+    for col in ["promo", "state_holiday", "school_holiday"]:
+        if col in d.columns:
+            d[col] = d[col].fillna(0).astype(int)
+        else:
+            d[col] = 0
 
     # drop first rows with NaN lags
-    d = d.dropna(subset=["units_lag1", "units_lag7"])
+    d = d.dropna(subset=["units_lag1", "units_lag7", "units_lag14", "price_lag1"])
 
     # --- Data leakage prevention: flag columns that calculate the target ---
     leakage = _detect_leakage_columns(d, target="sales")

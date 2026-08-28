@@ -13,7 +13,9 @@ _recommend_features = [
     "price", "competitor_price", "price_vs_competitor", "price_ratio_to_base",
     "price_over_cat", "inventory", "is_weekend", "month",
     "year_sin", "year_cos", "seasonal_factor", "weather_factor",
-    "units_lag1", "units_lag7", "units_roll7",
+    "units_lag1", "units_lag2", "units_lag3", "units_lag7", "units_lag14",
+    "units_roll7", "units_roll14", "price_change_1", "price_change_7",
+    "promo", "state_holiday", "school_holiday",
 ]
 
 
@@ -68,8 +70,17 @@ def _make_row(p, base, comp, cat, inventory, dow, doy) -> dict:
         "seasonal_factor": seasonal,
         "weather_factor": 1.0,
         "units_lag1": 12.0,
+        "units_lag2": 12.0,
+        "units_lag3": 12.0,
         "units_lag7": 12.0,
+        "units_lag14": 12.0,
         "units_roll7": 12.0,
+        "units_roll14": 12.0,
+        "price_change_1": 0.0,
+        "price_change_7": 0.0,
+        "promo": 0,
+        "state_holiday": 0,
+        "school_holiday": 0,
     }
 
 
