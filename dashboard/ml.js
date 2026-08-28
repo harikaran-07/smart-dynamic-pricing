@@ -143,7 +143,7 @@
     var tone = q.score >= 85 ? "var(--ok)" : q.score >= 50 ? "var(--warn)" : "var(--bad)";
     var html = '<div class="ml-quality">' +
       '<div class="ml-q-score" style="--qc:' + tone + '"><b>' + q.score + '</b><span>/100</span></div>' +
-      '<div class="ml-q-body"><h4>Dataset quality: ' + esc(q.label) + "</h4>" +
+      '<div class="ml-q-body"><h3>Dataset quality: ' + esc(q.label) + "</h3>" +
       "<p>" + fmt(profile.rows) + " rows \u00B7 " + fmt(profile.total_missing || 0) + " missing \u00B7 " +
       fmt(profile.duplicates || 0) + " duplicates \u00B7 target: <b>" + esc(profile.suggested_target || "\u2014") + "</b></p>" +
       (q.issues && q.issues.length

@@ -44,7 +44,7 @@
     .pp-card{background:linear-gradient(180deg,var(--card),var(--card-2));border:1px solid var(--line);
       border-radius:var(--rad);padding:18px}
     .pp-card.wide{grid-column:1/-1}
-    .pp-card h4{margin:0 0 4px;font-size:14.5px;font-weight:700}
+    .pp-card h3,.pp-card h4{margin:0 0 4px;font-size:14.5px;font-weight:700}
     .pp-card .sub{font-size:12px;color:var(--faint);margin:0 0 12px}
     .pp-kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px;margin:12px 0}
     .pp-kpi{background:#0c1220;border:1px solid var(--line);border-radius:12px;padding:13px 14px;position:relative;overflow:hidden}
@@ -170,7 +170,7 @@
       ['Product', 'Date', 'Price', 'Cost', 'Competitor', 'Stock', 'Units'].map(function (h) { return '<th>' + h + '</th>'; }).join("") +
       '</tr></thead><tbody>' + (previewRows || '<tr><td colspan="7" style="text-align:center;color:var(--faint)">No rows</td></tr>') + '</tbody></table></div>';
 
-    var dsCard = el('<div class="pp-card wide"><h4>Dataset Analytics</h4>' +
+    var dsCard = el('<div class="pp-card wide"><h3>Dataset Analytics</h3>' +
       '<p class="sub">Size, quality, basic statistics and a preview of the active dataset. Missing values are filled with the column median and duplicate rows are reported.</p>' +
       chips + statsGrid + preview +
       (report.missingValues ? '<div class="pp-expl"><b>Heads-up:</b> ' + report.missingValues + ' missing value(s) were detected and safely filled using the median of each column.</div>' : "") +
@@ -191,7 +191,7 @@
         }).join("") + '</tbody></table></div></div>';
     }
 
-    var modelCard = el('<div class="pp-card wide"><h4>ML Model Intelligence</h4><p class="sub">Trained with a strict 80/20 train/test split, economic elasticity estimation, and multi-model tournament.</p>' +
+    var modelCard = el('<div class="pp-card wide"><h3>ML Model Intelligence</h3><p class="sub">Trained with a strict 80/20 train/test split, economic elasticity estimation, and multi-model tournament.</p>' +
       '<div class="pp-kpis">' +
       statKpi("Champion Model", esc(m.championName || m.name), "winning backbone") +
       statKpi("Price Elasticity (ε)", (m.elasticity != null ? fmt(m.elasticity, 2) : "—"), "demand responsiveness") +
@@ -428,8 +428,8 @@
     var host = document.getElementById("pp-steps");
     if (!host) return;
     host.innerHTML = state.mode === "dataset"
-      ? steps(1) + ' <span style="color:var(--faint);font-size:11px;margin-left:auto;align-self:center">Dataset Mode — analyze and predict from uploaded data</span>'
-      : steps(1) + ' <span style="color:var(--faint);font-size:11px;margin-left:auto;align-self:center">Manual Mode — predict from entered values</span>';
+      ? steps(1) + ' <span style="color:var(--faint);font-size:12px;margin-left:auto;align-self:center">Dataset Mode — analyze and predict from uploaded data</span>'
+      : steps(1) + ' <span style="color:var(--faint);font-size:12px;margin-left:auto;align-self:center">Manual Mode — predict from entered values</span>';
   }
 
   root.PricingPredict = {

@@ -32,20 +32,20 @@
     display:grid;place-items:center;color:#fff;font-weight:800;font-size:20px;
     box-shadow:0 6px 18px rgba(91,140,255,.4)}
   .brand h1{margin:0;font-size:19px;letter-spacing:.2px}
-  .brand p{margin:2px 0 0;font-size:12px;color:var(--faint)}
+  .brand p{margin:2px 0 0;font-size:13px;color:var(--faint)}
   .spacer{flex:1}
   .head-controls{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
-  .rate-input{width:74px;margin:0;padding:8px 10px;font-size:12.5px}
-  .ds-upload-btn{width:auto;margin:0;padding:9px 16px;font-size:12.5px;border-radius:999px;
+  .rate-input{width:74px;margin:0;padding:8px 10px;font-size:13px}
+  .ds-upload-btn{width:auto;margin:0;padding:9px 16px;font-size:13px;border-radius:999px;
     display:inline-flex;align-items:center;gap:7px}
   .pill{display:inline-flex;align-items:center;gap:7px;padding:7px 14px;border-radius:999px;
-    font-size:12.5px;font-weight:600;border:1px solid var(--line);background:var(--card)}
+    font-size:13px;font-weight:600;border:1px solid var(--line);background:var(--card)}
   .pill::before{content:"";width:8px;height:8px;border-radius:50%;background:var(--warn)}
   .pill.ok{color:var(--ok)} .pill.ok::before{background:var(--ok)}
   .pill.bad{color:var(--bad)} .pill.bad::before{background:var(--bad)}
   .pill.dim::before{background:var(--faint)}
 
-  h2.sec{font-size:13px;text-transform:uppercase;letter-spacing:1.4px;color:var(--faint);
+  h2.sec{font-size:13px;letter-spacing:1.4px;color:var(--faint);
     margin:34px 0 14px;display:flex;align-items:center;gap:10px}
   h2.sec::after{content:"";flex:1;height:1px;background:linear-gradient(90deg,var(--line),transparent)}
 
@@ -92,7 +92,7 @@
   .res-row .v{font-weight:650;text-align:right;color:var(--txt)}
   .res-row .v.hero{font-size:20px;color:var(--ok);font-weight:800}
   .res-row .v.bad{color:var(--bad)}
-  .badge{display:inline-block;padding:2px 9px;border-radius:999px;font-size:11px;font-weight:700;
+  .badge{display:inline-block;padding:2px 9px;border-radius:999px;font-size:12px;font-weight:700;
     background:rgba(52,211,153,.14);color:var(--ok);border:1px solid rgba(52,211,153,.3)}
   .badge.soft{background:rgba(139,92,246,.14);color:var(--acc-2);border-color:rgba(139,92,246,.3)}
   .badge.warn{background:rgba(251,191,36,.14);color:var(--warn);border-color:rgba(251,191,36,.3)}
@@ -115,7 +115,7 @@
   @media (max-width:520px){.brand p{display:none}.wrap{padding:16px 12px 32px}}
   .mode-switch{display:inline-flex;gap:2px;padding:3px;border-radius:12px;border:1px solid var(--line);
     background:#0c1220;flex:none}
-  .mode-btn{width:auto;margin:0;padding:8px 14px;font-size:12.5px;border-radius:9px;background:none;
+  .mode-btn{width:auto;margin:0;padding:8px 14px;font-size:13px;border-radius:9px;background:none;
     color:var(--mut);box-shadow:none;border:0;font-weight:600}
   .mode-btn:hover{color:var(--txt);filter:none;transform:none}
   .mode-btn.active{background:linear-gradient(135deg,var(--acc),var(--acc-2));color:#fff}
@@ -141,17 +141,17 @@
   .ml-row{display:flex;gap:14px;align-items:baseline;padding:9px 0;border-bottom:1px solid rgba(34,48,80,.5);
     flex-wrap:wrap}
   .ml-row:last-child{border-bottom:0}
-  .ml-row span{width:130px;color:var(--mut);font-size:12.5px;flex:none}
+  .ml-row span{width:130px;color:var(--mut);font-size:13px;flex:none}
   .ml-row b{color:var(--txt);font-size:13.5px}
-  .ml-row i{color:var(--faint);font-size:11.5px;font-style:normal;margin-left:auto;text-align:right;max-width:340px}
+  .ml-row i{color:var(--faint);font-size:12px;font-style:normal;margin-left:auto;text-align:right;max-width:340px}
   .ml-grid2{display:grid;grid-template-columns:repeat(auto-fit,minmax(330px,1fr));gap:16px}
   .ml-col h4,.ml-avp h4,.ml-tbl h4,.ml-price h4{margin:2px 0 10px;font-size:13px;color:var(--mut);
-    text-transform:uppercase;letter-spacing:.8px}
+    letter-spacing:.8px}
   .ml-chartbox{background:#0c1220;border:1px solid var(--line);border-radius:12px;padding:10px;margin-top:10px}
   .ml-chartbox canvas{height:190px}
   .ml-table{width:100%;border-collapse:collapse;font-size:12px}
   .ml-table th,.ml-table td{border:1px solid var(--line);padding:7px 9px;text-align:left}
-  .ml-table th{background:#0c1220;color:var(--acc);font-size:10.5px;text-transform:uppercase;
+  .ml-table th{background:#0c1220;color:var(--acc);font-size:11px;text-transform:uppercase;
     letter-spacing:.5px}
   .ml-table td{color:var(--mut)}
   .ml-table .ml-best td{background:rgba(52,211,153,.08);color:var(--txt)}
@@ -162,20 +162,20 @@
   .ml-reason{display:flex;gap:10px;align-items:flex-start;padding:9px 14px;border-bottom:1px solid rgba(34,48,80,.5)}
   .ml-reason:last-child{border-bottom:0}
   .ml-reason span{color:var(--acc-2);font-size:14px;width:16px;flex:none}
-  .ml-reason p{margin:0;font-size:12.5px;color:var(--txt);line-height:1.5}
-  .ml-caveat{margin:10px 2px 0;font-size:11.5px;color:var(--faint);font-style:italic}
+  .ml-reason p{margin:0;font-size:13px;color:var(--txt);line-height:1.5}
+  .ml-caveat{margin:10px 2px 0;font-size:12px;color:var(--faint);font-style:italic}
   .ml-btn{width:auto;padding:11px 22px;margin-top:14px}
   .ml-price .ml-col:first-child{background:#0c1220;border:1px solid var(--line);border-radius:12px;padding:16px}
   .ml-empty{color:var(--faint);font-size:12.5px}
-  .ml-empty .ml-upload-btn{width:auto;margin:14px 0 0;padding:10px 18px;font-size:12.5px}
-  .ml-cost-note{font-size:12px;color:var(--faint);margin:4px 0 0}
+  .ml-empty .ml-upload-btn{width:auto;margin:14px 0 0;padding:10px 18px;font-size:13px}
+  .ml-cost-note{font-size:13px;color:var(--faint);margin:4px 0 0}
   .ml-quality{display:flex;gap:16px;background:#0c1220;border:1px solid var(--line);border-radius:12px;
     padding:16px;align-items:center;flex-wrap:wrap}
   .ml-q-score{width:86px;height:86px;border-radius:50%;background:conic-gradient(var(--qc) calc(var(--p,100)*1%),rgba(34,48,80,.5) 0);
     display:grid;place-items:center;flex:none}
   .ml-q-score b{color:var(--txt);font-size:24px;line-height:1}
   .ml-q-score span{color:var(--faint);font-size:10.5px;display:block;text-align:center}
-  .ml-q-body h4{margin:0 0 6px;font-size:13.5px}
+  .ml-q-body h3,.ml-q-body h4{margin:0 0 6px;font-size:13.5px}
   .ml-q-body p{margin:2px 0;font-size:12px;color:var(--mut)}
   .ml-q-body ul{margin:6px 0 0;padding-left:18px;font-size:12px;color:var(--warn);line-height:1.6}
   .rel-badge{display:inline-block;padding:3px 10px;border-radius:20px;font-size:12px;font-weight:700;
@@ -184,36 +184,11 @@
   .rel-medium{background:rgba(251,191,36,.15);color:var(--warn)}
   .rel-low{background:rgba(248,113,113,.15);color:var(--bad)}
   .ml-rules{margin-top:8px;background:#0c1220;border:1px solid var(--line);border-radius:12px;padding:10px 14px}
-  .ml-rules h5{margin:0 0 6px;font-size:11.5px;color:var(--acc);text-transform:uppercase;letter-spacing:.6px}
+  .ml-rules h5{margin:0 0 6px;font-size:12px;color:var(--acc);text-transform:uppercase;letter-spacing:.6px}
   .ml-rules ul{margin:0;padding-left:18px}
-  .ml-rules li{font-size:12px;color:var(--mut);line-height:1.6;margin:2px 0}
+  .ml-rules li{font-size:13px;color:var(--mut);line-height:1.6;margin:2px 0}
 
-/* Consolidated button styles - reduced from 10+ to 5 core styles */
-.button-primary {
-  width: 100%; padding: 12px 16px; border: 0; border-radius: 10px;
-  background: linear-gradient(135deg, var(--acc), var(--acc-2)); color: white;
-  font-weight: 700; font-size: 13.5px; cursor: pointer; box-shadow: 0 8px 20px rgba(91,140,255,.3);
-  transition: .15s; }
-.button-primary:hover { filter: brightness(1.08); transform: translateY(-1px); }
-
-.button-secondary {
-  width: auto; padding: 8px 14px; border: 0; border-radius: 9px;
-  background: none; color: var(--mut); font-weight: 600; font-size: 12.5px;
-  box-shadow: none; }
-
-.pill-badge {
-  display: inline-flex; align-items: center; gap: 7px; padding: 7px 14px;
-  border-radius: 999px; font-size: 12.5px; font-weight: 600; border: 1px solid var(--line);
-  background: var(--card); }
-
-.small-badge {
-  display: inline-block; padding: 2px 9px; border-radius: 999px; font-size: 11px;
-  font-weight: 700; background: rgba(52,211,153,.14); color: var(--ok);
-  border: 1px solid rgba(52,211,153,.3); }
-
-.mode-select {
-  width: auto; padding: 8px 14px; border: 0; border-radius: 9px;
-  background: none; color: var(--mut); box-shadow: none; border: 0; font-size: 12.5px; }
+/* Consolidated button styles — reuse existing .pill, .mode-btn, .badge classes */
 </style>
 </head>
 <body>

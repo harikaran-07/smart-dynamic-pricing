@@ -36,7 +36,7 @@
     .px-card{background:linear-gradient(180deg,var(--card),var(--card-2));border:1px solid var(--line);
       border-radius:var(--rad);padding:18px;position:relative}
     .px-card.wide{grid-column:1/-1}
-    .px-card h4{margin:0 0 4px;font-size:14.5px;font-weight:700}
+    .px-card h3,.px-card h4{margin:0 0 4px;font-size:14.5px;font-weight:700}
     .px-card .sub{font-size:12px;color:var(--faint);margin:0 0 12px}
     .px-chart{height:250px;margin-top:6px}
     .px-chart.tall{height:280px}
@@ -116,7 +116,7 @@
       kpi("Duplicate records", fmt(report.duplicates), report.duplicates ? "exact duplicates" : "none found") +
       kpi("Model R²", model.r2, "MAE " + model.mae + " units") +
       kpi("Training time", model.trainingTimeMs + " ms", "client-side training");
-    var card = el('<div class="px-card wide"><h4>Automatic Model Analysis</h4>' +
+    var card = el('<div class="px-card wide"><h3>Automatic Model Analysis</h3>' +
       '<p class="sub">Data cleaning, feature scaling and model training run automatically on the active dataset.</p>' +
       '<div class="px-kpis">' + kpis + '</div>' +
       '<div class="px-accbar"><div class="mb"><span>R² (share of variance explained)</span><b>' + model.r2 + '</b></div>' +
@@ -376,7 +376,7 @@
       '<thead><tr>' + ['Product','Date','Price','Cost','Competitor','Stock','Units'].map(function (h) { return '<th style="border:1px solid var(--line);padding:6px 8px;text-align:left;color:var(--acc)">' + h + '</th>'; }).join("") +
       '</tr></thead><tbody>' + (previewRows || '<tr><td colspan="7" style="border:1px solid var(--line);padding:6px;color:var(--faint)">No rows</td></tr>') + '</tbody></table></div>';
 
-    var card = el('<div class="px-card wide"><h4>Dataset Analytics</h4>' +
+    var card = el('<div class="px-card wide"><h3>Dataset Analytics</h3>' +
       '<p class="sub">Size, quality checks, descriptive statistics and a preview of the active dataset.</p>' +
       '<div class="px-kpis">' + kpis + '</div>' +
       statsGrid +
@@ -388,7 +388,7 @@
 
     /* ML model card */
     var m = a.model;
-    var modelCard = el('<div class="px-card wide"><h4>ML Model</h4><p class="sub">Real hold-out metrics from the client-side pricing model — no fake accuracy.</p>' +
+    var modelCard = el('<div class="px-card wide"><h3>ML Model</h3><p class="sub">Real hold-out metrics from the client-side pricing model — no fake accuracy.</p>' +
       '<div class="px-kpis">' +
       kpi("Model used", m.name, m.backbone) +
       kpi("Training status", m.status, m.trainedAt ? new Date(m.trainedAt).toLocaleString() : "") +
