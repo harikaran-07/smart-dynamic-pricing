@@ -16,8 +16,7 @@ customer segmentation and an AI negotiation agent.
 - **REST API (FastAPI)** with live price recommendation and negotiation endpoints.
 - **Prediction Center** — a dedicated two-mode panel: **Dataset Mode** (upload/analyze a
   dataset, review data quality & model metrics, and browse a per-product prediction table
-  with CSV export) and **Manual Mode** (enter price, demand, sales, inventory, competitor,
-  quantity and season to get KPI cards, a recommended price and dynamic reasoning).
+  with CSV export) .
 - **Currency support** — switch between USD ($) and INR (₹) from the header; INR uses
   Indian digit grouping (e.g. ₹1,25,000) and the exchange rate is configurable. Every
   price/revenue/profit value updates across all panels.
