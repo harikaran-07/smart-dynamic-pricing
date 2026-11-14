@@ -132,6 +132,8 @@ def main() -> int:
         ok("Fraunces" in html and "fonts.googleapis.com" in html, "Fraunces font linked")
         ok("Upload &amp; Analytics" in html and "Portfolio" in html, "nav pages present")
         ok("Manual Mode" not in html, "no Manual Mode switcher in the page")
+        ok('value="USD"' in html and 'value="INR"' in html,
+           "currency selector offers USD and INR")
     except Exception as exc:      # noqa: BLE001
         ok(False, f"dashboard page unreachable: {exc}")
 
