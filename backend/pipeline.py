@@ -69,7 +69,14 @@ def prepare_features(df: pd.DataFrame, target: str, features=None) -> tuple[np.n
         )
 
     df = df.copy()
-    stats = {"dropped_rows_invalid": 0, "missing_filled": 0, "dropped_columns": []}
+    stats = {"dropped_rows_invalid": 0, "missing_filled": 0, "dropped_columns": [],
+             "duplicates_removed": 0, "date_features": None}
+
+    # exact duplicate records are dropped before any fitting
+    dups = int(df.duplicated().sum())
+    if dups:
+        df = df.drop_duplicates()
+    stats["duplicates_removed"] = dups
 
     # drop rows with invalid target values
     y_raw = pd.to_numeric(df[target], errors="coerce")
@@ -102,17 +109,37 @@ def prepare_features(df: pd.DataFrame, target: str, features=None) -> tuple[np.n
     missing_before = int(df[feat_cols].isna().sum().sum())
     stats["missing_before"] = missing_before
 
-    # datetime -> month + weekday + cyclical harmonics
-    for c in [c for c in feat_cols if _dtype_kind(df[c]) == "datetime"]:
+    # date -> month, day_of_week, is_weekend and cyclical day-of-year terms.
+    # CSV dates arrive as strings, so detect them by name + parseability instead
+    # of letting them fall through to "too many categories".
+    date_cols = []
+    for c in list(feat_cols):
+        name = str(c).lower()
+        if _dtype_kind(df[c]) == "datetime":
+            date_cols.append(c)
+        elif not pd.api.types.is_numeric_dtype(df[c]) and any(
+                tok in name for tok in ("date", "day", "month")):
+            try:
+                if pd.to_datetime(df[c], errors="coerce").notna().mean() > 0.5:
+                    date_cols.append(c)
+            except Exception:
+                continue
+
+    for c in date_cols:
         try:
             dt = pd.to_datetime(df[c], errors="coerce")
-            df[c + "_month"] = dt.dt.month.fillna(0).astype(float)
+            if dt.notna().mean() <= 0.5:
+                raise ValueError("not a date column")
+            doy = dt.dt.dayofyear.fillna(1).astype(float)
+            df[c + "_month"] = dt.dt.month.fillna(1).astype(float)
             df[c + "_dow"] = dt.dt.dayofweek.fillna(0).astype(float)
-            m_rad = 2 * np.pi * df[c + "_month"] / 12.0
-            df[c + "_sin_m"] = np.sin(m_rad).astype(float)
-            df[c + "_cos_m"] = np.cos(m_rad).astype(float)
-            feat_cols = [c + "_month" if x == c else x for x in feat_cols]
-            feat_cols.extend([c + "_dow", c + "_sin_m", c + "_cos_m"])
+            df[c + "_is_weekend"] = dt.dt.dayofweek.isin([5, 6]).astype(float)
+            df[c + "_sin_doy"] = np.sin(2 * np.pi * doy / 365.25).astype(float)
+            df[c + "_cos_doy"] = np.cos(2 * np.pi * doy / 365.25).astype(float)
+            feat_cols = [x for x in feat_cols if x != c]
+            feat_cols.extend([c + "_month", c + "_dow", c + "_is_weekend",
+                              c + "_sin_doy", c + "_cos_doy"])
+            stats["date_features"] = c
         except Exception:
             stats["dropped_columns"].append(c)
             feat_cols = [x for x in feat_cols if x != c]
@@ -383,6 +410,37 @@ def run_pipeline(df: pd.DataFrame, target: str, features=None) -> dict:
 
     importance = _feature_importance(best_model, feature_names, best_row["name"])
 
+    # chronological hold-out: the last 20% of dates are never used for training
+    time_split = None
+    date_col = stats.get("date_features")
+    if date_col and date_col in clean_df.columns:
+        try:
+            dt = pd.to_datetime(clean_df[date_col], errors="coerce")
+            if dt.notna().any():
+                order = list(dt.sort_values().index)
+                n_test = max(1, int(round(len(order) * TEST_SIZE)))
+                test_set = set(order[-n_test:])
+                tr = np.array([i for i, ix in enumerate(clean_df.index) if ix not in test_set])
+                te = np.array([i for i, ix in enumerate(clean_df.index) if ix in test_set])
+                if len(tr) > 30 and len(te) > 5:
+                    from sklearn.base import clone
+                    tmodel = clone(models[best_idx][1])
+                    y_tr_t = np.log1p(y[tr]) if use_log else y[tr]
+                    tmodel.fit(X[tr], y_tr_t)
+                    tpred = np.clip(inv(tmodel.predict(X[te])), 0, None)
+                    time_split = {
+                        "r2": round(float(r2_score(y[te], tpred)), 4),
+                        "mae": round(float(mean_absolute_error(y[te], tpred)), 3),
+                        "rmse": round(float(np.sqrt(mean_squared_error(y[te], tpred))), 3),
+                        "train_rows": int(len(tr)),
+                        "test_rows": int(len(te)),
+                        "date_column": date_col,
+                        "note": ("Chronological split: the last 20% of dates are "
+                                 "held out, which is the honest test for a forecast."),
+                    }
+        except Exception:
+            time_split = None
+
     return {
         "dataset": {
             "rows": int(len(df)),
@@ -393,7 +451,7 @@ def run_pipeline(df: pd.DataFrame, target: str, features=None) -> dict:
             "train_rows": int(len(X_train)),
             "test_rows": int(len(X_test)),
             "test_size": TEST_SIZE,
-            "duplicates_removed": int(df.duplicated().sum()),
+            "duplicates_removed": int(stats.get("duplicates_removed", 0)),
             "missing_before": stats.get("missing_before", 0),
             "missing_filled": stats.get("missing_filled", 0),
             "rows_dropped_invalid": stats.get("dropped_rows_invalid", 0),
@@ -402,6 +460,13 @@ def run_pipeline(df: pd.DataFrame, target: str, features=None) -> dict:
             "log_target": bool(use_log),
         },
         "models": results,
+        "random_split": {
+            "r2": best_row["r2"],
+            "mae": best_row["mae"],
+            "rmse": best_row["rmse"],
+            "note": "Random 80/20 hold-out split.",
+        },
+        "time_split": time_split,
         "best": {
             "name": best_row["name"],
             "r2": best_row["r2"],

@@ -9,7 +9,9 @@ data/kaggle3/
 /models/
 notebooks/
 *.csv
+!test_pricing_data.csv
 *.png
+!screenshots/*.png
 !reports/*.png
 !reports/report.json
 .env

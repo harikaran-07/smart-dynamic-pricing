@@ -61,7 +61,20 @@ class TrainRequest(BaseModel):
 class PricingRequest(BaseModel):
     dataset_id: str
     row: dict = Field(default_factory=dict)
-    objective: str = "revenue"
+    objective: str = "profit"
+
+
+class RLRequest(BaseModel):
+    dataset_id: str
+    row: dict = Field(default_factory=dict)
+
+
+class NegotiateRequest(BaseModel):
+    list_price: float
+    cost: float = 0.0
+    budget: float | None = None
+    min_margin_pct: float = 20.0
+    max_rounds: int = 5
 
 
 def _get_df(dataset_id: str):
@@ -77,6 +90,7 @@ def health():
         "status": "ok",
         "service": "smart-pricing-api",
         "models_ready": True,
+        "pricing_mode": "dataset",
         "ml": {
             "linear": True,
             "xgboost": pl.HAS_XGB,
@@ -152,9 +166,56 @@ def recommend(req: PricingRequest):
     return result
 
 
+@app.post("/api/rl-price")
+def rl_price(req: RLRequest):
+    """Tabular Q-learning trained on the demand curve fitted from the dataset."""
+    df, _ = _get_df(req.dataset_id)
+    cols = pr.detect_columns(df)
+    row = req.row or {}
+    if not row:
+        raise HTTPException(status_code=400, detail="A product row is required.")
+    price = pr._n(row.get(cols["price"]), None) if cols["price"] else None
+    if not price or price <= 0:
+        raise HTTPException(status_code=400, detail="The row has no usable price.")
+    cost = pr._n(row.get(cols["cost"]), 0.0) if cols["cost"] else 0.0
+    inventory = pr._n(row.get(cols["inventory"]), None) if cols["inventory"] else None
+    if not inventory or inventory <= 0:
+        inventory = max(10.0, price * 10)
+    competitor = pr._n(row.get(cols["competitor"]), None) if cols["competitor"] else None
+    model = pr._fit_with_fallback(df, cols, row)
+    if model.kind == "unsupported":
+        raise HTTPException(
+            status_code=400,
+            detail="No usable demand curve in this dataset — the RL agent needs one.",
+        )
+    result = pr.q_learn(model, price, cost or 0.0, inventory, competitor)
+    result["demand_model"] = {
+        "kind": model.kind,
+        "elasticity": round(model.elasticity, 3),
+        "r2": round(model.r2, 3),
+        "n_obs": model.n_obs,
+    }
+    return result
+
+
+@app.post("/api/negotiate")
+def negotiate(req: NegotiateRequest):
+    """Multi-round negotiation simulation with a hard minimum margin."""
+    try:
+        return pr.negotiate(
+            list_price=req.list_price,
+            cost=req.cost,
+            budget=req.budget,
+            min_margin_pct=req.min_margin_pct,
+            max_rounds=req.max_rounds,
+        )
+    except pr.PricingError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
 class PortfolioRequest(BaseModel):
     dataset_id: str
-    objective: str = "revenue"
+    objective: str = "profit"
     top: int = 10
 
 
