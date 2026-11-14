@@ -1,268 +1,130 @@
-# Smart Dynamic Pricing System (ML)
+# Smart Dynamic Pricing
 
-Machine-learning based dynamic pricing system that recommends optimal product prices in
-real time using demand forecasting, inventory, competitor monitoring, seasonality,
-customer segmentation and an AI negotiation agent.
+A dataset-driven pricing dashboard. Upload a sales history and the FastAPI backend fits a
+demand curve per product, recommends a price, and shows the evidence behind it: elasticity
+with a confidence interval, R², reliability, applied business rules and a sensitivity table.
 
-## Features
+The browser only parses and previews data. **Every price, metric and simulation is computed
+by the backend** — there is no in-browser pricing model and no fabricated output.
 
-- **Demand forecasting** — XGBoost / Random Forest / Linear regression + ARIMA time-series baseline.
-- **Competitor-aware pricing** — prices react to competitor movements & price elasticity.
-- **Inventory-aware price adjustments** — markdowns when stock is high / scarce; uplift when supply is tight.
-- **Seasonal & festival optimization** — one-hot season features and event uplift multipliers.
-- **Customer segmentation & loyalty scoring** — K-Means clusters + loyalty score.
-- **AI Negotiation Agent** — simulates a customer-agent bargain and returns a personalized discount
-  based on loyalty, purchase history, demand pressure and a "churn risk" willingness-to-buy.
-- **REST API (FastAPI)** with live price recommendation and negotiation endpoints.
-- **Prediction Center** — a dedicated two-mode panel: **Dataset Mode** (upload/analyze a
-  dataset, review data quality & model metrics, and browse a per-product prediction table
-  with CSV export) .
-- **Currency support** — switch between USD ($) and INR (₹) from the header; INR uses
-  Indian digit grouping (e.g. ₹1,25,000) and the exchange rate is configurable. Every
-  price/revenue/profit value updates across all panels.
-- **Dashboard** — a lightweight HTML/JS monitor (served by the API) for price changes vs sales.
+## What it does
+
+- **Upload & Analytics** — CSV upload, column mapping, data-quality score, backend model
+  comparison (Linear / Random Forest / Gradient Boosting / XGBoost), feature importances,
+  actual-vs-predicted and descriptive analytics (revenue, profit, seasonality, inventory).
+- **Predict** — 5-step flow (Upload → Profile → Train → Price → Results). The
+  recommendations table, chart, CSV export and product detail all come from the backend;
+  the detail panel shows the candidate curve, binding rules and a ±10% sensitivity table.
+- **Portfolio** — every product ranked by the size of the recommended change, with the
+  current price taken as the median of the last 14 days.
+- **Decision tools** — a real tabular Q-learning agent and a multi-round negotiation
+  simulation, both run on the backend against the fitted demand curve. Both are labelled
+  as simulations.
 
 ## Tech stack
 
-Python 3.12 · pandas · NumPy · scikit-learn · XGBoost · statsmodels · FastAPI · uvicorn · React-like plain JS dashboard.
-
-## Getting started
-
-```bash
-# 1) create venv and install
-python -m venv .venv
-# Windows:
-.venv\Scripts\activate
-# macOS/Linux:
-source .venv/bin/activate
-
-pip install -r requirements.txt
-
-# 2) download the Kaggle dataset (creates data/raw/kaggle_sales.csv)
-python -m scripts.download_kaggle
-
-# 3) train models (creates models/*.joblib)
-python -m scripts.train_kaggle
-
-# 4) launch the API
-python -m src.api.app
-# open http://127.0.0.1:8000  (Swagger: /docs, dashboard: /)
-```
+Python 3.12 · pandas · NumPy · scikit-learn · XGBoost · FastAPI · uvicorn · plain-JS dashboard
+(no build step) · Fraunces + Inter from Google Fonts.
 
 ## Project layout
 
 ```
-src/
-  config.py            # paths + hyperparams
-  data/
-    preprocess.py      # feature engineering
-  models/
-    demand.py          # forecasting regressors
-    time_series.py     # ARIMA baseline
-segmentation.py    # K-Means + loyalty scoring
-  negotiation.py     # AI negotiation agent
-  rl_agent.py        # reinforcement-learning price agent (Q-learning)
-    pricing.py         # price optimizer
-  pipeline.py          # end-to-end orchestration
-  api/
-    app.py             # FastAPI app + dashboard
-  training/
-    train.py           # train/eval + save artifacts
-scripts/
-  run.ps1              # start the API on Windows
-  smoke_test.py        # quick API verification
-  test_engine.js          # Node harness for the upload/analytics/model pipeline
-  test_dashboard_boot.js  # Node DOM-shim boot test for charts/engine/analytics/upload
+backend/
+  main.py             # FastAPI app, routes, static dashboard mount
+  dataset.py          # CSV parsing, profiling, quality score
+  pipeline.py         # model comparison, date features, random + time split
+  pricing.py          # log-log demand model, optimiser, portfolio, Q-learning, negotiation
 dashboard/
-  index.html           # monitor dashboard (served by the API)
-  charts.js            # professional canvas charting (tooltips, zoom, bands, markers)
-  engine.js            # data pipeline: CSV/Excel, mapping, cleaning, client ML, analytics, currency
-  analytics.js         # Advanced Analytics (Overview / Dataset / Pricing / Profit / Seasonal / Inventory)
-  predict.js           # Prediction Center: Dataset + Manual modes, KPI cards, recommendation panel
-  upload.js            # Data Source control + upload workflow + toasts/overlay
+  index.html          # shell, design tokens, navigation, decision tools
+  engine.js           # parsing, column mapping, cleaning, descriptive analytics
+  analytics.js        # Upload & Analytics tabs
+  predict.js          # dataset-only Predict + Portfolio pages
+  upload.js           # upload flow, toasts, cross-module refresh
+  ml.js               # backend pipeline panels
+  charts.js           # canvas charts, colours from CSS variables
+scripts/
+  make_test_data.py   # regenerates test_pricing_data.csv
+  test_engine.js      # engine + analytics harness
+  test_dashboard_boot.js  # DOM-shim boot test with a mocked backend
+  test_live_pages.js  # live asset/boot smoke test
+  check_live_site.py  # tolerance-based acceptance check against a running service
+  screenshots.py      # Playwright captures at 1280px and 390px
+tests/
+  test_backend_pricing.py  # pytest suite for the pricing/pipeline backend
+test_pricing_data.csv      # 1,835-row fixture, 5 products, 10 duplicates
+screenshots/               # captured pages
+src/                       # legacy experiment package (not used by the deployed app)
 ```
 
-## API examples
-
-```bash
-# monitoring / overview metrics + model performance
-curl http://127.0.0.1:8000/api/overview
-
-# sales history for a product (30 days by default)
-curl "http://127.0.0.1:8000/api/sales/P001?days=30"
-
-# get a recommended price for a product
-curl -X POST http://127.0.0.1:8000/api/price \
-  -H "Content-Type: application/json" \
-  -d '{"product_id":"P001","inventory":43,"competitor_price":29.9,"demand_pressure":0.6}'
-
-# negotiate a deal as a customer
-curl -X POST http://127.0.0.1:8000/api/negotiate \
-  -H "Content-Type: application/json" \
-  -d '{"customer_id":"c-102","product_id":"P001","demand_pressure":0.7}'
-
-# price recommendation from the reinforcement-learning agent
-curl -X POST http://127.0.0.1:8000/api/rl-price \
-  -H "Content-Type: application/json" \
-  -d '{"product_id":"P001","inventory":43,"demand_pressure":0.6}'
-
-# manual-mode prediction (no dataset product needed)
-curl -X POST http://127.0.0.1:8000/api/manual \
-  -H "Content-Type: application/json" \
-  -d '{"product_name":"Wireless Headphones","category":"Electronics","price":49.99,"cost":22.0,"inventory":50,"competitor":55.0,"discount_pct":10,"demand_pressure":0.5,"marketing_spend":120,"customer_rating":4.2,"season":"Festival","holiday":true,"weekend":1,"month":10,"dow":5}'
-```
-
-Dashboard: open `http://127.0.0.1:8000/` for live price recommendations, AI negotiation,
-model performance and a sales-history chart. Interactives: Swagger at `/docs`.
-
-## GitHub Pages
-
-The dashboard starts empty: every panel asks you to **Upload Dataset** until a CSV
-is applied. Without the backend, the dataset is mirrored in-browser (analytics,
-Prediction Center, Decision Engine use a transparent client-side model of the same
-data); the ML Pipeline and price recommendations need the backend, which is detected
-via `window.API_BASE` (set it to your Render URL when hosting on Pages).
-
-### Data Source & upload
-
-The header **Data Source** control opens an **Upload Dataset** flow (CSV / Excel):
-
-- files are parsed (Excel via the lazily-loaded SheetJS CDN) with a progress bar,
-- columns are auto-detected and mapped to required features (fuzzy matching + manual
-  mapping dropdowns; missing required columns produce clear validation errors),
-- a preview of the first 10 rows is shown,
-- the pipeline then **cleans missing values, scales numeric features and trains a
-  client-side demand model**, reporting dataset size, features, products, records,
-  missing values, R²/MAE/RMSE and training time plus an AI-generated summary,
-- every prediction and chart switches to the uploaded dataset until the dashboard
-  is reset.
-
-### Prediction Center (Dataset & Manual modes)
-
-The **Prediction Center** (Dataset & Manual modes) offers a 5-step workflow
-(Select Mode → Enter/Upload Data → Analyze → Predict → View Results):
-
-- **Dataset Mode** — shows dataset analytics (size, features, missing values, duplicates,
-  min/max/avg statistics and a row preview), the trained **ML model card** (model used,
-  training status, R², MAE, RMSE, train/test split, training time) and a **prediction
-  table** with the recommended price, change %, expected demand and revenue per product,
-  plus a CSV download button.
-- **Manual Mode** — an independent form (current price, demand, sales, inventory,
-  competitor price, quantity, season, month, day type) with a **Predict Price** button
-  that produces professional KPI cards (Recommended Price, Expected Demand, Expected
-  Revenue, Expected Profit, Price Change, Confidence), the explanation
-  *"The recommended price is based on demand, inventory, competitor pricing, and
-  historical sales patterns"*, and a dynamic **Pricing Recommendation** panel that
-  explains each factor (demand pressure, inventory, competitor price, season, margin).
-
-The **Advanced Analytics** section (Overview / **Dataset** / **Pricing** / Demand /
-Profit / Seasonal / Inventory tabs) renders the revenue, profit, demand and seasonal
-charts with tooltips, zoom/pan, legends, grid lines, confidence bands, reference lines,
-and automatic highest/lowest markers. The **Pricing** tab adds Actual vs Recommended
-Price, Demand vs Price, Revenue & Profit comparison, Sales/Demand trend, Inventory vs
-Price and Competitor vs Recommended charts. Use **Refresh Model** to retrain and
-**Export Predictions (CSV)** to download per-product price recommendations.
-
-### Currency
-
-The header **currency selector** switches between **USD ($)** and **INR (₹)**. All
-prices, revenue and profit values update everywhere immediately. INR uses Indian digit
-grouping (lakh/crore — e.g. ₹1,25,000) and an **exchange rate field** appears for INR so
-the conversion (default 1 USD = 83 INR) can be adjusted.
-
-Verify the new pipeline and modules with the Node harnesses:
-
-```bash
-node scripts/test_engine.js           # CSV/mapping/cleaning/model/analytics/forecast/currency
-node scripts/test_dashboard_boot.js   # DOM-shim boot for charts/engine/analytics/predict/upload
-python scripts/test_backend.py        # dataset quality / pipeline / pricing rules / portfolio
-```
-
-To publish: push this repo, enable **Settings → Pages** (deploy from the `main` branch,
-root `/`), then open `https://<user>.github.io/smart-dynamic-pricing/`.
-
-## Backend CSV pipeline & Render deployment
-
-The `backend/` FastAPI app powers **Upload Mode** — the real ML pipeline:
-
-- `POST /api/dataset/upload` — CSV upload (≤10 MB), secure parsing, auto column
-  detection, data-quality scoring (0–100 with label + issues list),
-- `POST /api/pipeline/train` — Linear Regression / Random Forest / Gradient Boosting /
-  XGBoost on an 80/20 split with 5-fold cross-validation; honest hold-out metrics,
-  feature importances, actual-vs-predicted and a per-row prediction table,
-- `POST /api/pricing/recommend` — business-rule-constrained optimisation: never below
-  cost (or 50% of current price when no cost column), never more than +20% in one step,
-  per-candidate profit, a High/Medium/Low reliability score and plain-language reasons,
-- `POST /api/pricing/portfolio` — per-product recommendations, largest changes first,
-- `GET /api/dataset/sample` — raw rows for the demand-vs-price and trend charts.
-
-Run it locally (from the `backend/` directory so the imports resolve):
+## Run locally
 
 ```bash
 pip install -r backend/requirements.txt
 cd backend
 python -m uvicorn main:app --reload
+# dashboard + API on http://127.0.0.1:8000
 ```
 
-The dashboard and API are then served from the same origin (`http://127.0.0.1:8000`).
-Verify with `python scripts/test_backend.py` (all suites green: 0 failures).
+The dashboard starts empty and pings `/api/health` on load; the action buttons stay disabled
+until the API answers (Render free instances take 35–60 s to wake).
 
-**Expected accuracy on the Kaggle dataset** (download with `python -m scripts.download_kaggle`):
-hold-out R² ≈ 0.65 (Random Forest, best) with 5-fold CV; per-product log-log demand fits
-used by the price optimizer reach R² 0.1–0.4 with elasticities between −0.8 and −1.6.
-For maximum accuracy, run `python -m scripts.train_all_90` to train all 5 Kaggle datasets
-with aggressive feature engineering (45/50 models achieve R² > 0.90).
+## API
 
-### Deploying to Render
+| Method | Path | Purpose |
+| --- | --- | --- |
+| GET | `/api/health` | readiness probe used by the dashboard gate |
+| POST | `/api/dataset/upload` | parse a CSV, score quality, suggest the target |
+| POST | `/api/pipeline/train` | train/compare models, random and time-split R² |
+| POST | `/api/pricing/recommend` | demand model, optimal price, rules, sensitivity |
+| POST | `/api/pricing/portfolio` | per-product recommendations |
+| POST | `/api/rl-price` | tabular Q-learning price (simulation) |
+| POST | `/api/negotiate` | multi-round negotiation with a margin floor (simulation) |
+| GET | `/api/dataset/sample` | raw rows for the observed-data charts |
 
-1. Push the repo to GitHub.
-2. On Render: **New → Blueprint** and import the repo (settings are already in
-   `backend/render.yaml`), or create a **Web Service** with root directory `backend`:
-   - build: `pip install -r requirements.txt`
-   - start: `uvicorn main:app --host 0.0.0.0 --port $PORT`
-   - health check path: `/api/health`
-3. When the dashboard is served from GitHub Pages (different origin), point it at the
-   Render service in `dashboard/index.html`:
+Example:
 
-   ```js
-   window.API_BASE = "https://smart-pricing-api.onrender.com";
-   ```
+```bash
+curl -X POST http://127.0.0.1:8000/api/pricing/recommend \
+  -H "Content-Type: application/json" \
+  -d '{"dataset_id":"...","objective":"profit",
+       "row":{"product_id":"P002","price":35,"cost":15,"competitor_price":36,
+              "discount_pct":5,"inventory":120,"units_sold":40,"date":"2025-12-01"}}'
+```
 
-   Every `/api/...` call is prefixed with `API_BASE` when set — leave it empty for
-   same-origin local use, set it to the Render URL for the Pages deployment. If Render
-   is unreachable, Upload Mode degrades to the in-browser mirror with a clear warning.
+The response contains `demand_model` (elasticity, standard error, 95% CI, p-value, R², n),
+`current`, `optimal`, `rules` (only rules that actually bound), `reliability`
+(High/Medium/Low with the reason) and `sensitivity` for −10…+10% price moves.
+
+### Pricing rules
+
+- Objective defaults to **profit** when a cost column exists; revenue is available and
+  reports the profit change, warning when profit falls.
+- Prices never exceed +20% of the current price and never fall below cost.
+- Reliability is **Low** when R² < 0.10, the elasticity CI includes 0, or n < 30;
+  **High** only when R² ≥ 0.30, n ≥ 150, the CI excludes 0 and elasticity ∈ [−3, −0.3].
+- Duplicates are dropped before fitting; a date column becomes month, day-of-week,
+  is-weekend and sin/cos day-of-year features, and a chronological split is reported
+  alongside the random split.
 
 ## Tests
 
 ```bash
-.venv\\Scripts\\python.exe -m pytest -q
+python -m pytest tests/test_backend_pricing.py -q
+node scripts/test_engine.js
+node scripts/test_dashboard_boot.js
+python scripts/check_live_site.py --base http://127.0.0.1:8000
+python scripts/screenshots.py            # needs `python -m playwright install chromium`
 ```
 
-Covers data generation, feature engineering, demand models, price optimizer,
-segmentation, budget-aware negotiation, the RL agent and the API surface.
+`scripts/check_live_site.py` is tolerance-based: it regenerates the fixture expectations
+(elasticity ±0.3, profit price within ±5% of the theoretical optimum, P001 not High,
+competitor/discount sensitivity, 14-day median, negotiation floor) and can be pointed at a
+deployed service, e.g. `--base https://smart-dynamic-pricing.onrender.com`.
 
-## Explainability
+## Deploy
 
-Generate feature-importance charts, predicted-vs-actual and model-comparison
-figures plus a `reports/report.json` summary:
-
-```bash
-.venv\\Scripts\\python.exe scripts\\generate_report.py
-```
-
-Serve them over the API (read by the dashboard):
-
-```bash
-curl http://127.0.0.1:8000/api/explain
-```
-
-Works on the current Kaggle dataset: **Random Forest** is the best demand model
-(R² ≈ 0.65); top drivers are `seasonality_factor`, `return_rate`, `discount_pct`,
-`inventory` and `cost`.
-
-## Verification
-
-Trains end-to-end (`python -m src.training.train`) producing demand models
-(Linear / Random Forest / XGBoost — XGBoost best, R² ≈ 0.67), ARIMA baselines,
-customer segments and the negotiation agent. A smoke test is available at
-`scripts/smoke_test.py`; the API boots and serves the dashboard + all endpoints.
+`backend/render.yaml` describes the Render web service (root `backend`, start
+`uvicorn main:app --host 0.0.0.0 --port $PORT`, health check `/api/health`). The dashboard is
+served by the same app. When hosted separately (GitHub Pages), `window.API_BASE` is the only
+setting that changes; the dashboard then talks to the Render origin and shows a Retry button
+if it is unreachable.
