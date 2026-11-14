@@ -1,7 +1,9 @@
-/* Boot smoke test: loads charts.js, engine.js, analytics.js, upload.js and
- * ml.js against a minimal DOM/canvas shim and verifies the dashboard
- * analytics + upload modules mount without throwing, then that an upload flow
- * (parse -> map -> normalize -> applyUpload) refreshes everything end-to-end.
+/* Boot + dataset-flow smoke test.
+ *
+ * Loads charts.js, engine.js, analytics.js, predict.js, upload.js and ml.js
+ * against a minimal DOM/canvas shim, then drives the Predict page with a
+ * mocked backend and checks that the table it paints is exactly the backend
+ * portfolio response (no browser-side price model).
  */
 "use strict";
 const fs = require("fs");
@@ -44,6 +46,7 @@ function makeEl(tag) {
     querySelector(sel) { if (!this._qs[sel]) this._qs[sel] = makeEl("div"); return this._qs[sel]; },
     querySelectorAll() { return []; },
     closest() { if (!this._closestHost) this._closestHost = makeEl("div"); return this._closestHost; },
+    setAttribute() {}, getAttribute() { return null; },
     insertAdjacentHTML(pos, html) { this._innerHTML += String(html); },
     getContext() { return makeCtx(); },
     get clientWidth() { return 320; },
@@ -59,6 +62,7 @@ const els = {};
 const doc = {
   head: { appendChild() {} },
   body: makeEl("body"),
+  documentElement: makeEl("html"),
   getElementById(id) { if (!els[id]) els[id] = makeEl("div"); return els[id]; },
   createElement(tag) {
     if (tag === "template") return { content: { firstChild: makeEl("div") } };
@@ -73,11 +77,55 @@ globalThis.Blob = function () {};
 globalThis.FileReader = function () {};
 const win = globalThis;
 
-// read + evaluate scripts in order in the shared global scope
 function load(file) {
   const src = fs.readFileSync(path.join(ROOT, "dashboard", file), "utf8");
   new Function("window", "document", "Option", src)(win, doc, globalThis.Option);
 }
+
+/* ---------- mocked backend (the values the table must show) ---------- */
+const BACKEND_PORTFOLIO = {
+  items: [
+    { product: "A1", current_price: 20, recommended_price: 18.4, change_pct: -8, expected_demand: 6.1,
+      expected_revenue: 112.24, expected_profit: 53.68, elasticity: -1.2, reliability: "High" },
+    { product: "A2", current_price: 30, recommended_price: 33, change_pct: 10, expected_demand: 4.2,
+      expected_revenue: 138.6, expected_profit: 44.1, elasticity: -0.7, reliability: "Low" },
+  ],
+  supported: 2, total: 2, note: null,
+};
+const BACKEND_RECOMMEND = {
+  supports_optimization: true, reason: null, currency: "USD",
+  current: { price: 20, estimated_demand: 5, estimated_revenue: 100, estimated_profit: 50 },
+  optimal: { price: 18.4, estimated_demand: 6.1, estimated_revenue: 112.24, estimated_profit: 53.68,
+    change_pct: -8, objective: "profit", profit_change_pct: 7.4 },
+  demand_model: { kind: "product", r2: 0.42, n_obs: 200, elasticity: -1.2,
+    elasticity_ci95: [-1.5, -0.9], elasticity_p_value: 0.001, controls: [] },
+  reliability: { level: "High", score: null, max: null, reasons: ["R² 0.42."] },
+  rules: [{ rule: "max-single-step-increase", applied: true, detail: "Capped at +20%." }],
+  warnings: [],
+  sensitivity: [
+    { price_change_pct: -10, price: 16.56, demand: 7.2, revenue: 119.2, profit: 61.2, profit_change_pct: 14.0 },
+    { price_change_pct: -5, price: 17.48, demand: 6.6, revenue: 115.4, profit: 57.1, profit_change_pct: 6.4 },
+    { price_change_pct: 0, price: 18.4, demand: 6.1, revenue: 112.24, profit: 53.68, profit_change_pct: 0 },
+    { price_change_pct: 5, price: 19.32, demand: 5.6, revenue: 108.2, profit: 50.0, profit_change_pct: -6.9 },
+    { price_change_pct: 10, price: 20.24, demand: 5.2, revenue: 105.2, profit: 46.8, profit_change_pct: -12.8 },
+  ],
+  candidates: Array.from({ length: 400 }, function (_, i) {
+    var p = 16 + i * 0.01;
+    return { price: p, estimated_demand: 6.2 - i * 0.004, estimated_revenue: p * (6.2 - i * 0.004) };
+  }),
+  reasons: [{ icon: "↘", tone: "down", text: "Lower price raises demand." }],
+  caveat: "Statistical estimate from the uploaded history.",
+};
+
+const calls = [];
+win.PricingApi = {
+  api: function (route, body) {
+    calls.push({ route: route, body: body });
+    if (route === "/api/pricing/portfolio") return Promise.resolve(BACKEND_PORTFOLIO);
+    if (route === "/api/pricing/recommend") return Promise.resolve(BACKEND_RECOMMEND);
+    return Promise.resolve({});
+  },
+};
 
 (async () => {
   load("charts.js");
@@ -88,6 +136,7 @@ function load(file) {
   load("ml.js");
 
   assert(typeof win.PricingCharts === "object" && typeof win.PricingCharts.Chart === "function", "PricingCharts.Chart defined");
+  assert(typeof win.PricingCharts.color === "function", "chart colours resolved from tokens (color())");
   assert(typeof win.PricingData === "object" && typeof win.PricingData.analytics === "function", "PricingData defined");
   assert(typeof win.PricingData.setCurrency === "function" && typeof win.PricingData.fmtMoney === "function", "currency API exposed (setCurrency/fmtMoney)");
 
@@ -98,47 +147,22 @@ function load(file) {
   assert(win.PricingData.analytics() === null, "no analytics until a dataset is uploaded");
   assert(win.PricingData.source() === "", "engine starts empty (no demo data)");
   assert(win.PricingML && typeof win.PricingML.render === "function", "PricingML module exposes render()");
+  assert(typeof win.PricingML.renderPrice === "undefined", "ML price panel removed (Predict owns it)");
   win.PricingML.render();
   assert(doc.getElementById("ml-steps").innerHTML === "", "ML pipeline stepper empty before upload");
   assert(doc.getElementById("ml-root").innerHTML.indexOf("Upload a CSV dataset") >= 0, "ML pipeline shows upload empty state");
-  win.PricingML.renderPrice();
-  assert(doc.getElementById("ml-price-root").innerHTML.indexOf("Upload a dataset") >= 0, "ML price panel shows upload empty state");
   assert(els["px-content"].children.length > 0, "analytics panel shows an empty state without data");
 
+  /* ---------- Predict page: dataset-only ---------- */
   bootErr = null;
   try { win.PricingPredict.mount(); } catch (e) { bootErr = e; }
   assert(!bootErr, "PricingPredict.mount() boots without throwing" + (bootErr ? " — " + bootErr.message : ""));
   assert(els["predict-root"].children.length > 0, "prediction center rendered into #predict-root");
-  assert(typeof win.PricingPredict.getMode === "function" && win.PricingPredict.getMode() === "dataset", "prediction center defaults to Dataset Mode");
+  assert(win.PricingPredict.getMode() === "dataset", "prediction center is dataset-only");
+  assert(typeof win.PricingPredict.setMode === "undefined", "no manual-mode switch remains");
+  assert(els["pp-content"].innerHTML.indexOf("No dataset loaded") >= 0, "Predict shows the upload empty state");
 
-  bootErr = null;
-  try { win.PricingPredict.setMode("manual"); win.PricingPredict.render(); } catch (e) { bootErr = e; }
-  assert(!bootErr, "PricingPredict Manual Mode renders without throwing" + (bootErr ? " — " + bootErr.message : ""));
-  bootErr = null;
-  try { win.PricingPredict.setMode("dataset"); win.PricingPredict.render(); } catch (e) { bootErr = e; }
-  assert(!bootErr, "PricingPredict back to Dataset Mode renders" + (bootErr ? " — " + bootErr.message : ""));
-
-  bootErr = null;
-  try { win.PricingUI.boot(); } catch (e) { bootErr = e; }
-  assert(!bootErr, "PricingUI.boot() boots without throwing" + (bootErr ? " — " + bootErr.message : ""));
-  assert(typeof els["data-source"].onclick === "function", "Upload Dataset button wired");
-  assert(typeof win.PricingUI.openModal === "function", "PricingUI.openModal exposes the upload flow");
-
-  // empty-state buttons hand off to the upload modal
-  win.PricingML.render();
-  const mlEmpty = doc.getElementById("ml-root").innerHTML;
-  assert(mlEmpty.indexOf("PricingUI.openModal") >= 0, "ML empty state has an Upload Dataset button");
-  win.PricingML.renderPrice();
-  assert(doc.getElementById("ml-price-root").innerHTML.indexOf("PricingUI.openModal") >= 0, "ML price empty state has an Upload Dataset button");
-
-  // switch tabs through the analytics panel
-  const tabs = [];
-  try {
-    const panel = els["px-root"].children[0];
-    tabs.length; // (shim children are generic)
-  } catch (_) {}
-
-  // upload flow end-to-end (parse -> map -> normalize -> applyUpload)
+  /* upload a tiny dataset (parsing stays in the browser) */
   const P = win.PricingData;
   const csv = "product,order_date,selling_price,qty\nA1,2026-03-01,20,5\nA2,2026-03-02,30,7";
   const parsed = P.parseCSV(csv);
@@ -148,132 +172,76 @@ function load(file) {
   assert(P.active(), "uploaded dataset active after applyUpload");
   const a = P.analytics();
   assert(a.records === 2 && a.products === 2, "analytics reflects uploaded rows (" + a.records + "/" + a.products + ")");
-  assert(/A1/.test(P.insightText(a)), "AI summary mentions uploaded product");
 
-  // currency: INR lakh formatting + exchange rate
+  /* the backend answers with the portfolio + detail */
+  win.PricingBackend = {
+    profile: { rows: 2, duplicates: 0, suggested_target: "units_sold",
+      quality: { score: 88, label: "Excellent", issues: [] } },
+    train: { best: { name: "Random Forest", r2: 0.61, mae: 3.2, rmse: 4.1 },
+      time_split: { r2: 0.54, note: "last 20% held out" } },
+    datasetId: "abc123", fileName: "t.csv", offline: false,
+  };
+
+  win.PricingPredict.render();
+  await new Promise((r) => setTimeout(r, 80));
+
+  const html = els["pp-content"].innerHTML;
+  assert(calls.some((c) => c.route === "/api/pricing/portfolio"), "portfolio endpoint called");
+  assert(calls.some((c) => c.route === "/api/pricing/recommend"), "recommend endpoint called for the detail panel");
+
+  // every recommended price in the backend response is in the table
+  const money = (v) => P.fmtMoney(v, 2);
+  assert(html.indexOf(money(BACKEND_PORTFOLIO.items[0].recommended_price)) >= 0,
+    "table shows backend recommended price for A1 (" + money(BACKEND_PORTFOLIO.items[0].recommended_price) + ")");
+  assert(html.indexOf(money(BACKEND_PORTFOLIO.items[1].recommended_price)) >= 0,
+    "table shows backend recommended price for A2 (" + money(BACKEND_PORTFOLIO.items[1].recommended_price) + ")");
+  assert(html.indexOf("High") >= 0 && html.indexOf("Low") >= 0, "reliability labels come from the backend");
+  assert(html.indexOf("Random Forest") >= 0, "model card names the backend champion");
+  assert(html.indexOf("54") >= 0 || html.indexOf("0.54") >= 0, "time-split R² reported");
+
+  // the detail panel uses the backend recommend response
+  assert(html.indexOf("Why this price") >= 0, "detail panel explains the recommendation");
+  assert(html.indexOf("Sensitivity") >= 0, "detail panel includes the sensitivity table");
+  assert(html.indexOf("max-single-step-increase") >= 0, "applied business rules listed");
+  assert(html.indexOf(money(BACKEND_RECOMMEND.sensitivity[0].price)) >= 0, "sensitivity rows painted");
+
+  // no manual-mode strings survive anywhere in the rendered page
+  assert(html.indexOf("Manual Mode") === -1 && html.indexOf("Predict Price") === -1, "no manual-mode UI remains");
+
+  /* backend offline: clear message, no fallback numbers */
+  win.PricingBackend = { profile: null, train: null, datasetId: null, fileName: "t.csv", offline: true };
+  win.PricingPredict.render();
+  await new Promise((r) => setTimeout(r, 30));
+  const offlineHtml = els["pp-content"].innerHTML;
+  assert(offlineHtml.indexOf("Backend unavailable") >= 0 || offlineHtml.indexOf("could not be sent") >= 0,
+    "offline dataset shows a backend error, not fake prices");
+  assert(offlineHtml.indexOf("Retry") >= 0 || offlineHtml.indexOf("could not be sent") >= 0,
+    "offline state offers a way forward");
+
+  /* upload UI wiring */
+  bootErr = null;
+  try { win.PricingUI.boot(); } catch (e) { bootErr = e; }
+  assert(!bootErr, "PricingUI.boot() boots without throwing" + (bootErr ? " — " + bootErr.message : ""));
+  assert(typeof els["data-source"].onclick === "function", "Upload Dataset button wired");
+  assert(typeof win.PricingUI.openModal === "function", "PricingUI.openModal exposes the upload flow");
+
+  /* currency: INR lakh formatting + exchange rate */
   const cur = P.setCurrency("INR", 83);
   assert(cur.code === "INR" && cur.symbol === "₹" && cur.rate === 83, "setCurrency switches to INR with custom rate");
-  assert(P.fmtMoney(125000, 0) === "₹1,03,75,000", "INR formats lakh grouping (₹1,03,75,000 for 125000 USD)");
-  assert(/₹/.test(P.fmtMoney(49.99, 2)), "INR symbol appears in fmtMoney");
+  assert(P.fmtMoney(125000, 0) === "₹1,03,75,000", "INR formats lakh grouping");
   P.setCurrency("USD", 1);
   assert(P.fmtMoney(49.99, 2) === "$49.99", "USD formats with $ symbol");
 
-  // new dataset analytics functions
+  /* dataset report */
   const report = P.report();
   assert(typeof report.size === "number" && typeof report.duplicates === "number", "report exposes size + duplicates");
-  assert(report.stats && report.stats.price && report.stats.price.min >= 0, "report exposes basic statistics (min/max/avg)");
-  assert(Array.isArray(report.preview) && report.preview.length >= 1, "report includes a dataset preview");
+  assert(report.stats && report.stats.price && report.stats.price.min >= 0, "report exposes basic statistics");
 
-  const reasons = P.recommendReasons(P.analytics().productList[0], { inventory: 50, demand_pressure: 0.5 });
-  assert(Array.isArray(reasons.reasons) && reasons.reasons.length >= 3, "recommendReasons returns dynamic explanations");
-  assert(typeof reasons.recommended_price === "number" && typeof reasons.delta_pct === "number", "recommendReasons returns price + delta");
-
-  const predTable = P.predictionTable();
-  assert(Array.isArray(predTable) && predTable.length === a.products, "predictionTable returns one row per product");
-  assert(predTable[0].recommended_price > 0 && predTable[0].price_change_pct !== undefined, "prediction rows carry recommended price + change");
-
-  // upload.js refreshEverything wiring
+  /* upload.js refresh wiring */
   let refreshed = false;
   win.PricingAnalytics.render = function () { refreshed = true; };
   try { win.PricingUI.refreshEverything(); } catch (e) { console.error("refresh threw:", e); }
   assert(refreshed, "refreshEverything() calls PricingAnalytics.render");
-
-  // ---- ML upload-mode panels (backend-shaped state + stubbed fetch) ----
-  const fetchCalls = [];
-  const realFetch = globalThis.fetch;
-  win.API_BASE = "https://api.example.com";
-  globalThis.fetch = function (url) {
-    fetchCalls.push(String(url));
-    const u = String(url);
-    let body;
-    if (u.indexOf("/api/pricing/portfolio") >= 0) {
-      body = { items: [
-        { product: "A1", current_price: 20, recommended_price: 18, change_pct: -10, expected_demand: 6,
-          expected_revenue: 108, expected_profit: 36, elasticity: -1.2, reliability: "High" },
-        { product: "A2", current_price: 30, recommended_price: 33, change_pct: 10, expected_demand: 4,
-          expected_revenue: 132, expected_profit: 44, elasticity: -1.5, reliability: "Medium" } ] };
-    } else if (u.indexOf("/api/pricing/recommend") >= 0) {
-      body = {
-        supports_optimization: true, currency: "USD",
-        current: { price: 20, estimated_demand: 5 },
-        optimal: { price: 18, estimated_demand: 6, estimated_revenue: 108, estimated_profit: 36,
-          change_pct: -10, objective: "revenue" },
-        demand_model: { kind: "pooled", r2: 0.5, n_obs: 200, elasticity: -1.2 },
-        reliability: { level: "High", score: 7, max: 9, reasons: ["Solid history: 200 rows.", "Good demand fit."] },
-        rules: [{ rule: "max-single-step-increase", applied: true, detail: "Sweep capped at +20%." }],
-        reasons: [{ icon: "\u2192", text: "Lower price raises demand." }],
-        caveat: "ML-based estimate.",
-      };
-    } else {
-      body = {
-        rows: [
-          { product_id: "A1", price: 20, units_sold: 5, order_date: "2026-03-01" },
-          { product_id: "A1", price: 30, units_sold: 7, order_date: "2026-03-02" },
-          { product_id: "A2", price: 25, units_sold: 6, order_date: "2026-03-01" },
-        ],
-        pricing_columns: { price: "price", units: "units_sold", group: "product_id" },
-      };
-    }
-    return Promise.resolve({ ok: true, json: function () { return Promise.resolve(body); } });
-  };
-
-  const fakeProfile = {
-    rows: 200, total_missing: 3, duplicates: 1, suggested_target: "units_sold", dataset_id: "abc123",
-    quality: { score: 92, label: "Excellent", issues: ["2 missing values", "1 duplicate row"] },
-  };
-  const fakeTrain = {
-    best: { name: "Random Forest", r2: 0.61, mae: 3.2, rmse: 4.1 },
-    metrics_explained: { r2: "r2 explained", mae: "mae explained", rmse: "rmse explained" },
-    dataset: { rows: 200, features: 12, target: "units_sold" },
-    models: [
-      { name: "Linear Regression", r2: 0.5, mae: 3.4, rmse: 4.5, cv_r2_mean: 0.48, cv_r2_std: 0.02 },
-      { name: "Random Forest", r2: 0.61, mae: 3.2, rmse: 4.1, cv_r2_mean: 0.6, cv_r2_std: 0.03 },
-      { name: "Gradient Boosting", r2: 0.6, mae: 3.3, rmse: 4.2, cv_r2_mean: 0.59, cv_r2_std: 0.03 },
-      { name: "XGBoost", r2: 0.59, mae: 3.35, rmse: 4.25, cv_r2_mean: 0.58, cv_r2_std: 0.04 },
-    ],
-    feature_importance: [{ feature: "price", importance: 0.5 }],
-    test_predictions: [{ actual: 10, predicted: 9.2 }],
-    predictions_table: [{ product_id: "A1", actual: 5, predicted: 4.8 }],
-  };
-  win.PricingBackend = { profile: fakeProfile, train: fakeTrain, datasetId: "abc123", fileName: "t.csv", offline: false };
-
-  bootErr = null;
-  try { win.PricingML.render(); } catch (e) { bootErr = e; }
-  assert(!bootErr, "ML upload-mode panels render without throwing" + (bootErr ? " \u2014 " + bootErr.message : ""));
-  const upHost = doc.getElementById("ml-root").children[doc.getElementById("ml-root").children.length - 1];
-  assert(upHost.innerHTML.indexOf("Dataset quality") >= 0, "quality card rendered in upload mode");
-  assert(upHost.innerHTML.indexOf("Model comparison") >= 0, "model comparison table rendered in upload mode");
-  assert(upHost.innerHTML.indexOf("Portfolio") >= 0, "portfolio section present in upload mode");
-  await new Promise(r => setTimeout(r, 80));
-  assert(fetchCalls.some(u => u.indexOf("/api/pricing/portfolio") >= 0), "portfolio endpoint fetched");
-  assert(fetchCalls.length > 0 && fetchCalls.every(u => u.indexOf("https://api.example.com") === 0),
-    "API calls prefixed with API_BASE (" + fetchCalls.length + " calls)");
-  const portWrap = upHost._qs["#ml-up-portfolio-wrap"];
-  const portHtml = portWrap.innerHTML;
-  assert(portHtml.indexOf("<table") >= 0 && portHtml.indexOf("Reliability") >= 0 && portHtml.indexOf("High") >= 0,
-    "portfolio table populated from backend data");
-  assert(win.__mlCharts && win.__mlCharts["ml-up-portfolio"], "portfolio chart (current vs recommended) drawn");
-
-  bootErr = null;
-  try { win.PricingML.renderPrice(); } catch (e) { bootErr = e; }
-  assert(!bootErr, "ML upload price panel renders without throwing" + (bootErr ? " \u2014 " + bootErr.message : ""));
-  const priceHost = doc.getElementById("ml-price-root").children[doc.getElementById("ml-price-root").children.length - 1];
-  const runBtn = priceHost._qs["#ml-up-price-run"];
-  bootErr = null;
-  try { runBtn._onclick(); } catch (e) { bootErr = e; }
-  await new Promise(r => setTimeout(r, 40));
-  assert(!bootErr, "upload price recommendation click does not throw" + (bootErr ? " \u2014 " + bootErr.message : ""));
-  const out = priceHost._qs["#ml-up-price-out"];
-  const outHtml = out.children.map(c => c.innerHTML).join(" ") + out.innerHTML;
-  assert(outHtml.indexOf("Estimated profit") >= 0 && outHtml.indexOf("Reliability") >= 0,
-    "price panel shows estimated profit + reliability badge");
-  assert(out.innerHTML.indexOf("Business rules applied") >= 0, "price panel lists applied business rules");
-
-  win.PricingBackend = { profile: null, train: null, datasetId: null, fileName: "t.csv", offline: true };
-  bootErr = null;
-  try { win.PricingML.render(); } catch (e) { bootErr = e; }
-  assert(!bootErr, "ML offline fallback renders without throwing" + (bootErr ? " \u2014 " + bootErr.message : ""));
-  globalThis.fetch = realFetch;
 
   process.exit(fails ? 1 : 0);
 })();

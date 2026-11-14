@@ -14,50 +14,66 @@
   var M = null; // MONTH_NAMES
   var state = { tab: "overview", product: null, charts: [] };
 
+  /* series colours are resolved from the :root chart tokens */
+  function col(i) { return (C && C.color) ? C.color(i) : "currentColor"; }
+
   function css() {
     var s = document.createElement("style");
     s.textContent = `
-    .px-panel{background:linear-gradient(180deg,var(--card),var(--card-2));border:1px solid var(--line);
-      border-radius:var(--rad);box-shadow:var(--shadow);overflow:hidden}
-    .px-toolbar{display:flex;flex-wrap:wrap;gap:10px;align-items:center;justify-content:space-between;
-      padding:12px 16px;border-bottom:1px solid var(--line);background:rgba(8,12,24,.35)}
-    .px-tabs{display:flex;flex-wrap:wrap;gap:4px}
-    /* .px-tab → .mode-btn (shared with predict.js) */
+    .px-panel{background:var(--card);border:1px solid var(--border);border-radius:var(--radius);
+      box-shadow:var(--shadow);overflow:hidden}
+    .px-toolbar{display:flex;flex-wrap:wrap;gap:12px;align-items:center;justify-content:space-between;
+      padding:14px 18px;border-bottom:1px solid var(--border);background:var(--card)}
+    .px-tabs{display:flex;flex-wrap:wrap;gap:4px;background:var(--bg);padding:4px;border-radius:999px;
+      border:1px solid var(--border)}
+    .px-tab{min-height:38px;padding:0 15px;border-radius:999px;background:transparent;color:var(--muted);
+      font-family:var(--font-body);font-weight:600;font-size:13px;border:0}
+    .px-tab:hover{color:var(--ink);background:var(--card)}
+    .px-tab.active{background:var(--accent);color:var(--on-accent)}
     .px-actions{display:flex;gap:8px;flex-wrap:wrap}
-    /* .px-btn → btn-secondary, .px-btn.px-primary → base button */
-    .px-content{padding:18px}
-    .px-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(330px,1fr));gap:16px}
-    .px-card{background:linear-gradient(180deg,var(--card),var(--card-2));border:1px solid var(--line);
-      border-radius:var(--rad);padding:18px;position:relative}
+    .px-actions button{min-height:44px;padding:0 16px;font-size:14px}
+    .px-content{padding:20px}
+    .px-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:20px}
+    .px-card{background:var(--card);border:1px solid var(--border);border-radius:var(--radius);
+      padding:20px 22px;position:relative}
     .px-card.wide{grid-column:1/-1}
-    .px-card h3{margin:0 0 4px;font-size:14px;font-weight:700}
-    .px-card .sub{font-size:12px;color:var(--faint);margin:0 0 12px}
+    .px-card h3{margin:0 0 4px;font-size:17px;font-weight:600}
+    .px-card .sub{font-size:13px;color:var(--muted);margin:0 0 12px}
     .px-chart{height:250px;margin-top:6px}
     .px-chart.tall{height:280px}
     .px-chart canvas{height:100%;width:100%}
-    .px-kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:10px;margin:12px 0}
-    .px-kpi{background:#0c1220;border:1px solid var(--line);border-radius:10px;padding:10px 12px}
-    .px-kpi .k{font-size:11px;color:var(--faint)}
-    .px-kpi .v{font-size:17px;font-weight:750;margin-top:3px}
-    .px-kpi .v.ok{color:var(--ok)} .px-kpi .v.bad{color:var(--bad)}
-    .px-summary{margin-top:12px;padding:12px 14px;border-radius:10px;background:rgba(91,140,255,.07);
-      border:1px solid rgba(91,140,255,.2);font-size:13px;line-height:1.65;color:var(--mut)}
-    .px-summary b{color:var(--txt)}
+    .px-kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:12px;margin:12px 0}
+    .px-kpi{background:var(--bg);border:1px solid var(--border);border-radius:12px;padding:12px 14px}
+    .px-kpi .k{font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px}
+    .px-kpi .v{font-family:var(--font-head);font-size:22px;font-weight:600;margin-top:4px}
+    .px-kpi .v.ok{color:var(--ok-fg)} .px-kpi .v.bad{color:var(--bad-fg)}
+    .px-summary{margin-top:14px;padding:13px 15px;border-radius:12px;background:var(--bg);
+      border:1px solid var(--border);font-size:13.5px;line-height:1.65;color:var(--ink)}
+    .px-summary b{color:var(--ink)}
     .px-chips{display:flex;flex-wrap:wrap;gap:8px;margin:10px 0 4px}
-    .px-chip{font-size:12px;padding:6px 11px;border-radius:999px;border:1px solid var(--line);
-      background:#0c1220;color:var(--mut);font-weight:600}
-    .px-chip b{color:var(--txt)}
-    .px-chip.hi{color:var(--ok);border-color:rgba(52,211,153,.35)}
-    .px-chip.lo{color:var(--bad);border-color:rgba(248,113,113,.35)}
+    .px-chip{font-size:12.5px;padding:6px 12px;border-radius:999px;border:1px solid var(--border);
+      background:var(--bg);color:var(--muted)}
+    .px-chip b{color:var(--ink);font-weight:600}
+    .px-chip.hi{background:var(--ok-bg);color:var(--ok-fg);border-color:var(--ok-bg)}
+    .px-chip.hi b{color:var(--ok-fg)}
+    .px-chip.lo{background:var(--bad-bg);color:var(--bad-fg);border-color:var(--bad-bg)}
+    .px-chip.lo b{color:var(--bad-fg)}
     .px-row{display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin-bottom:6px}
     .px-row label{margin:0}
-    .px-row select{width:auto;min-width:170px;margin:0}
+    .px-row select{width:auto;min-width:190px;margin:0}
     .px-accbar{margin-top:14px}
-    .px-accbar .bar{height:10px}
-    .px-err{margin-top:12px;padding:12px;border-radius:10px;background:rgba(248,113,113,.1);
-      border:1px solid rgba(248,113,113,.3);color:var(--bad);font-size:13px}
-    @media (max-width:560px){.px-toolbar{flex-direction:column;align-items:stretch}.px-actions{width:100%}
-      .px-actions button{flex:1}}
+    .px-accbar .bar{height:10px;border-radius:999px;background:var(--bg);overflow:hidden}
+    .px-accbar .bar i{display:block;height:100%;background:var(--accent)}
+    .px-empty{padding:34px 20px;text-align:center;color:var(--muted);font-size:13.5px;
+      border:1px dashed var(--border);border-radius:var(--radius);background:var(--card)}
+    @media (max-width:560px){
+      .px-toolbar{flex-direction:column;align-items:stretch}
+      .px-actions{width:100%}
+      .px-actions button{flex:1}
+      .px-content{padding:14px}
+      .px-grid{grid-template-columns:1fr}
+    }
+    @media (prefers-reduced-motion:reduce){ *{transition:none !important} }
     `;
     document.head.appendChild(s);
   }
@@ -99,25 +115,20 @@
     var a = P.analytics();
     var wrap = el('<div class="px-grid"></div>');
 
-    var model = a.model;
     var report = P.report();
     var kpis =
       kpi("Dataset size", fmt(a.records), "") +
-      kpi("Features", a.features, model.name) +
+      kpi("Columns used", a.features, "after cleaning") +
       kpi("Products", a.products, a.categories ? "categories" : "") +
       kpi("Months", a.months, "time span") +
       kpi("Missing values", fmt(report.missingValues), report.missingValues ? "filled via median" : "none found") +
-      kpi("Duplicate records", fmt(report.duplicates), report.duplicates ? "exact duplicates" : "none found") +
-      kpi("Model R²", model.r2, "MAE " + model.mae + " units") +
-      kpi("Training time", model.trainingTimeMs + " ms", "client-side training");
-    var card = el('<div class="px-card wide"><h3>Automatic Model Analysis</h3>' +
-      '<p class="sub">Data cleaning, feature scaling and model training run automatically on the active dataset.</p>' +
+      kpi("Duplicate records", fmt(report.duplicates), report.duplicates ? "dropped before fitting" : "none found") +
+      kpi("Best month", a.best_month || "—", "highest unit sales") +
+      kpi("Weekend effect", a.weekend_units + " u/day", "vs " + a.weekday_units + " on weekdays");
+    var card = el('<div class="px-card wide"><h3>Dataset Overview</h3>' +
+      '<p class="sub">Descriptive statistics of the active dataset. Predictive metrics and price recommendations come from the backend.</p>' +
       '<div class="px-kpis">' + kpis + '</div>' +
-      '<div class="px-accbar"><div class="mb"><span>R² (share of variance explained)</span><b>' + model.r2 + '</b></div>' +
-      '<div class="bar"><i style="width:' + Math.min(100, Math.round(Math.max(0, model.r2) * 100)) + '%"></i></div></div>' +
-      '<div class="px-summary"><b>AI summary</b> — ' + P.insightText(a) + '</div></div>');
-    wrap.appendChild(card);
-
+      '<div class="px-summary"><b>Summary</b> — ' + P.insightText(a) + '</div></div>');
     return wrap;
   }
 
@@ -147,7 +158,7 @@
     wrap.appendChild(c1);
     makeChart(c1.querySelector("canvas"), {
       xLabels: rtm.labels, title: "Revenue by month",
-      series: [{ name: "Revenue", color: "#5b8cff", data: rtm.data, smooth: true, area: true }],
+      series: [{ name: "Revenue", color: col(0), data: rtm.data, smooth: true, area: true }],
       yFmt: function (v) { return money(v, 0); },
     });
 
@@ -156,7 +167,7 @@
     wrap.appendChild(c2);
     makeChart(c2.querySelector("canvas"), {
       xLabels: ptm.labels, title: "Profit by month",
-      series: [{ name: "Profit", color: "#34d399", data: ptm.data, smooth: true, area: true }],
+      series: [{ name: "Profit", color: col(2), data: ptm.data, smooth: true, area: true }],
       yFmt: function (v) { return money(v, 0); },
     });
 
@@ -165,8 +176,8 @@
     makeChart(c3.querySelector("canvas"), {
       xLabels: rtm.labels, title: "Revenue vs Profit",
       series: [
-        { name: "Revenue", color: "#5b8cff", data: rtm.data, smooth: true, area: true, axis: "left" },
-        { name: "Profit", color: "#34d399", data: ptm.data, smooth: true, axis: "right" },
+        { name: "Revenue", color: col(0), data: rtm.data, smooth: true, area: true, axis: "left" },
+        { name: "Profit", color: col(2), data: ptm.data, smooth: true, axis: "right" },
       ],
       yFmt: function (v) { return money(v, 0); },
     });
@@ -176,7 +187,7 @@
     var pbp = byProfit.map(function (p) { return p.profit; });
     makeChart(c4.querySelector("canvas"), {
       xLabels: byProfit.map(function (p) { return p.product_id; }),
-      series: [{ name: "Profit", color: "#8b5cf6", type: "bar", data: pbp }],
+      series: [{ name: "Profit", color: col(4), type: "bar", data: pbp }],
       yFmt: function (v) { return money(v, 0); }, showValues: "bars",
     });
 
@@ -184,7 +195,7 @@
     wrap.appendChild(c5);
     makeChart(c5.querySelector("canvas"), {
       xLabels: ptm.labels,
-      series: [{ name: "Profit", color: "#fbbf24", type: "bar", data: ptm.data }],
+      series: [{ name: "Profit", color: col(3), type: "bar", data: ptm.data }],
       yFmt: function (v) { return money(v, 0); }, showValues: "bars",
     });
 
@@ -212,7 +223,7 @@
     wrap.appendChild(c1);
     makeChart(c1.querySelector("canvas"), {
       xLabels: ms.labels,
-      series: [{ name: "Units", color: "#5b8cff", type: "bar", data: ms.data }],
+      series: [{ name: "Units", color: col(0), type: "bar", data: ms.data }],
       yFmt: function (v) { return fmt(v, 0); }, showValues: "bars",
     });
 
@@ -220,7 +231,7 @@
     wrap.appendChild(c3);
     makeChart(c3.querySelector("canvas"), {
       xLabels: ["Regular days", "Holidays"],
-      series: [{ name: "Avg daily units", color: "#fbbf24", type: "bar", data: [a.nonholiday_units, a.holiday_units] }],
+      series: [{ name: "Avg daily units", color: col(3), type: "bar", data: [a.nonholiday_units, a.holiday_units] }],
       yFmt: function (v) { return fmt(v, 1); }, showValues: "bars",
     });
 
@@ -229,7 +240,7 @@
     wrap.appendChild(c4);
     makeChart(c4.querySelector("canvas"), {
       xLabels: fest.labels,
-      series: [{ name: "Avg daily units", color: "#f472b6", type: "bar", data: fest.data }],
+      series: [{ name: "Avg daily units", color: col(1), type: "bar", data: fest.data }],
       yFmt: function (v) { return fmt(v, 1); }, showValues: "bars",
     });
 
@@ -237,7 +248,7 @@
     wrap.appendChild(c5);
     makeChart(c5.querySelector("canvas"), {
       xLabels: ["Weekday", "Weekend"],
-      series: [{ name: "Avg daily units", color: "#8b5cf6", type: "bar", data: [a.weekday_units, a.weekend_units] }],
+      series: [{ name: "Avg daily units", color: col(4), type: "bar", data: [a.weekday_units, a.weekend_units] }],
       yFmt: function (v) { return fmt(v, 1); }, showValues: "bars",
     });
 
@@ -288,7 +299,7 @@
     wrap.appendChild(c1);
     makeChart(c1.querySelector("canvas"), {
       xLabels: invLabels,
-      series: [{ name: "Inventory", color: "#5b8cff", type: "bar", data: invData }],
+      series: [{ name: "Inventory", color: col(0), type: "bar", data: invData }],
       yFmt: function (v) { return fmt(v, 0); }, showValues: "bars",
     });
 
@@ -297,7 +308,7 @@
     var s = P.salesSeries(state.product);
     makeChart(c2.querySelector("canvas"), {
       xLabels: s.dates.map(function (d) { return String(d).slice(5); }),
-      series: [{ name: "Units sold", color: "#34d399", data: s.units_sold, smooth: true, area: true }],
+      series: [{ name: "Units sold", color: col(2), data: s.units_sold, smooth: true, area: true }],
       yFmt: function (v) { return fmt(v, 0); },
     });
 
@@ -306,7 +317,7 @@
     var pt = priceTrend(state.product);
     makeChart(c3.querySelector("canvas"), {
       xLabels: pt.labels,
-      series: [{ name: "Avg price", color: "#fbbf24", data: pt.data, smooth: true, area: true }],
+      series: [{ name: "Avg price", color: col(3), data: pt.data, smooth: true, area: true }],
       yFmt: function (v) { return money(v, 2); },
     });
 
@@ -315,7 +326,7 @@
     var invDl = invList.map(function (i) { return i.days_left; });
     makeChart(c4.querySelector("canvas"), {
       xLabels: invLabels,
-      series: [{ name: "Days left", color: "#f87171", type: "bar", data: invDl }],
+      series: [{ name: "Days left", color: col(4), type: "bar", data: invDl }],
       yFmt: function (v) { return fmt(v, 0); }, showValues: "bars",
     });
 
@@ -380,111 +391,82 @@
       '</div>');
     wrap.appendChild(card);
 
-    /* ML model card */
-    var m = a.model;
-    var modelCard = el('<div class="px-card wide"><h3>ML Model</h3><p class="sub">Real hold-out metrics from the client-side pricing model — no fake accuracy.</p>' +
-      '<div class="px-kpis">' +
-      kpi("Model used", m.name, m.backbone) +
-      kpi("Training status", m.status, m.trainedAt ? new Date(m.trainedAt).toLocaleString() : "") +
-      kpi("R² score", m.r2, "share of variance explained") +
-      kpi("MAE", fmt(m.mae, 2) + " units", "mean absolute error") +
-      kpi("RMSE", fmt(m.rmse, 2) + " units", "root mean squared error") +
-      kpi("Train / test", fmt(m.trainSize) + " / " + fmt(m.testSize), "80 / 20 hold-out split") +
-      kpi("Training time", fmt(m.trainingTimeMs) + " ms", "client-side") +
-      '</div><div class="px-accbar"><div class="mb"><span>R² (variance explained)</span><b>' + m.r2 + '</b></div>' +
-      '<div class="bar"><i style="width:' + Math.min(100, Math.round(Math.max(0, m.r2) * 100)) + '%"></i></div></div></div>');
-    wrap.appendChild(modelCard);
-
     return wrap;
   }
 
-  /* ---------------- Pricing tab (comparison charts) ---------------- */
+  /* ---------------- Pricing tab (observed prices & demand) ----------------
+   * No price is computed in the browser: every series below is a statistic of
+   * the uploaded rows. Recommendations live on the Predict page and come from
+   * the backend. */
   function renderPricing() {
     var a = P.analytics();
     var wrap = el('<div class="px-grid"></div>');
-    var table = P.predictionTable();
-    var labels = table.map(function (r) { return r.product_id; });
-    var base = table.map(function (r) { return r.base_price; });
-    var rec = table.map(function (r) { return r.recommended_price; });
-    var revenue = table.map(function (r) { return r.expected_revenue; });
-    var curRev = a.productList.map(function (p) { return Math.round(p.revenue / Math.max(1, a.months * 30)); });
-    var curProfit = a.productList.map(function (p) { return Math.round(p.profit / Math.max(1, a.months * 30)); });
+    var list = a.productList;
+    var labels = list.map(function (p) { return p.product_id; });
+    var prices = list.map(function (p) { return p.base_price; });
+    var units = list.map(function (p) { return p.avg_daily; });
+    var days = Math.max(1, a.months * 30);
+    var revDay = list.map(function (p) { return Math.round(p.revenue / days); });
+    var profDay = list.map(function (p) { return Math.round(p.profit / days); });
+    var comp = list.map(function (p) { return p.competitor_price; });
 
-    /* Actual vs Recommended */
-    var c1 = chartCard("Actual Price vs Recommended Price", "Current base price against the model recommendation — highest/lowest marked");
+    var c1 = chartCard("Price and demand by product",
+      "Median observed price (left axis) against average daily units (right axis)");
     wrap.appendChild(c1);
     makeChart(c1.querySelector("canvas"), {
       xLabels: labels,
       series: [
-        { name: "Actual price", color: "#5b8cff", type: "bar", data: base },
-        { name: "Recommended", color: "#34d399", type: "bar", data: rec },
+        { name: "Median price", color: col(0), type: "bar", data: prices, axis: "left" },
+        { name: "Units/day", color: col(2), data: units, axis: "right" },
       ],
-      yFmt: function (v) { return P.fmtMoney(v, 0); },
+      yFmt: function (v) { return money(v, 0); },
+      yFmtRight: function (v) { return fmt(v, 1); },
     });
 
-    /* Revenue comparison */
-    var c3 = chartCard("Revenue Comparison", "Current daily revenue vs expected revenue at the recommended price");
+    var c2 = chartCard("Revenue and profit per day",
+      "Observed daily revenue and profit per product (total / days in the data)");
+    wrap.appendChild(c2);
+    makeChart(c2.querySelector("canvas"), {
+      xLabels: labels,
+      series: [
+        { name: "Revenue/day", color: col(0), type: "bar", data: revDay },
+        { name: "Profit/day", color: col(2), type: "bar", data: profDay },
+      ],
+      yFmt: function (v) { return money(v, 0); },
+    });
+
+    var c3 = chartCard("Our price vs competitor price",
+      "Median observed prices per product - the gap is descriptive, not a recommendation");
     wrap.appendChild(c3);
     makeChart(c3.querySelector("canvas"), {
       xLabels: labels,
       series: [
-        { name: "Current revenue", color: "#5b8cff", type: "bar", data: curRev },
-        { name: "Expected revenue", color: "#34d399", type: "bar", data: revenue.map(function (v) { return Math.round(v); }) },
+        { name: "Our price", color: col(0), data: prices, smooth: true },
+        { name: "Competitor", color: col(1), data: comp, smooth: true },
       ],
-      yFmt: function (v) { return P.fmtMoney(v, 0); },
+      yFmt: function (v) { return money(v, 0); },
     });
 
-    /* Profit comparison */
-    var c4 = chartCard("Profit Comparison", "Current daily profit vs expected profit at the recommended price");
+    var c4 = chartCard("Price trend - " + state.product,
+      "Average selling price per month for the selected product");
+    c4.classList.add("wide");
     wrap.appendChild(c4);
-    var profitData = table.map(function (r, i) {
-      return Math.round((r.recommended_price - a.productList[i].cost) * r.expected_demand);
-    });
+    var pt = priceTrend(state.product);
     makeChart(c4.querySelector("canvas"), {
-      xLabels: labels,
-      series: [
-        { name: "Current profit", color: "#fbbf24", type: "bar", data: curProfit },
-        { name: "Expected profit", color: "#34d399", type: "bar", data: profitData },
-      ],
-      yFmt: function (v) { return P.fmtMoney(v, 0); },
+      xLabels: pt.labels,
+      series: [{ name: "Average price", color: col(0), data: pt.data, smooth: true, area: true }],
+      yFmt: function (v) { return money(v, 2); },
     });
 
-    /* Sales/Demand trend */
-    var c5 = chartCard("Sales Trend — " + state.product, "Daily units sold for the selected product (highest/lowest marked)");
+    var c5 = chartCard("Units sold - " + state.product,
+      "Daily units for the selected product (highest and lowest marked)");
     c5.classList.add("wide");
     wrap.appendChild(c5);
     var s = P.salesSeries(state.product);
     makeChart(c5.querySelector("canvas"), {
       xLabels: s.dates.map(function (d) { return String(d).slice(5); }),
-      series: [{ name: "Units sold", color: "#5b8cff", data: s.units_sold, smooth: true, area: true }],
+      series: [{ name: "Units sold", color: col(2), data: s.units_sold, smooth: true, area: true }],
       yFmt: function (v) { return fmt(v, 0); },
-    });
-
-    /* Inventory vs Price */
-    var c6 = chartCard("Inventory vs Price", "Stock level vs actual price per product (dual axis)");
-    wrap.appendChild(c6);
-    var invData = a.productList.map(function (p) { return p.inventory; });
-    makeChart(c6.querySelector("canvas"), {
-      xLabels: labels,
-      series: [
-        { name: "Inventory", color: "#f87171", type: "bar", data: invData, axis: "left" },
-        { name: "Actual price", color: "#22d3ee", data: base, smooth: true, axis: "right" },
-      ],
-      yFmt: function (v) { return fmt(v, 0); },
-      yFmtRight: function (v) { return P.fmtMoney(v, 0); },
-    });
-
-    /* Competitor vs Recommended */
-    var c7 = chartCard("Competitor Price vs Recommended Price", "Competitor price compared to our recommended price per product");
-    wrap.appendChild(c7);
-    var comp = a.productList.map(function (p) { return p.competitor_price; });
-    makeChart(c7.querySelector("canvas"), {
-      xLabels: labels,
-      series: [
-        { name: "Competitor price", color: "#f472b6", data: comp, smooth: true },
-        { name: "Recommended", color: "#34d399", data: rec, smooth: true },
-      ],
-      yFmt: function (v) { return P.fmtMoney(v, 0); },
     });
 
     return wrap;
@@ -540,16 +522,15 @@
       '<div class="px-panel">' +
       '<div class="px-toolbar">' +
       '<div class="px-tabs">' +
-      '<button class="mode-btn active" data-tab="overview">Overview</button>' +
-      '<button class="mode-btn" data-tab="dataset">Dataset</button>' +
-      '<button class="mode-btn" data-tab="pricing">Pricing</button>' +
-      '<button class="mode-btn" data-tab="profit">Profit</button>' +
-      '<button class="mode-btn" data-tab="seasonal">Seasonal</button>' +
-      '<button class="mode-btn" data-tab="inventory">Inventory &amp; Stock</button>' +
+      '<button class="px-tab mode-btn active" type="button" data-tab="overview">Overview</button>' +
+      '<button class="px-tab mode-btn" type="button" data-tab="dataset">Dataset</button>' +
+      '<button class="px-tab mode-btn" type="button" data-tab="pricing">Pricing</button>' +
+      '<button class="px-tab mode-btn" type="button" data-tab="profit">Profit</button>' +
+      '<button class="px-tab mode-btn" type="button" data-tab="seasonal">Seasonal</button>' +
+      '<button class="px-tab mode-btn" type="button" data-tab="inventory">Inventory &amp; Stock</button>' +
       '</div>' +
       '<div class="px-actions">' +
-      '<button class="btn-secondary" id="px-refresh">Refresh Model</button>' +
-      '<button id="px-export">Export Predictions (CSV)</button>' +
+      '<button class="btn-secondary" type="button" id="px-refresh">Refresh analytics</button>' +
       '</div></div>' +
       '<div class="px-content" id="px-content"></div>' +
       '<div class="px-row" style="padding:0 18px 18px">' +
@@ -570,11 +551,6 @@
       P.refreshModel();
       renderTab(state.tab);
       root.PricingUI && root.PricingUI.toast("Model retrained", "Recomputed analytics in " + Math.round(performance.now() - t0) + " ms.", "ok");
-    };
-    panel.querySelector("#px-export").onclick = function () {
-      var e = P.exportPredictions();
-      P.download(e.name, e.csv);
-      root.PricingUI && root.PricingUI.toast("Export ready", "Predictions CSV downloaded (" + e.name + ").", "ok");
     };
 
     panel.querySelectorAll(".mode-btn").forEach(function (b) {

@@ -326,300 +326,10 @@
   }
 
   /* ------------------------------------------------------------------ */
-  /* linear regression (ridge) for demand prediction                    */
+  /* feature list used for descriptive analytics                        */
   /* ------------------------------------------------------------------ */
-  /* Advanced Client-Side Machine Learning Suite & Model Tournament     */
   /* ------------------------------------------------------------------ */
   var FEATURES = ["price", "competitor_price", "cost", "inventory", "is_weekend", "month", "seasonal_factor", "price_gap"];
-
-  function featureVec(r) {
-    var p = Math.max(0.01, +r.price || 0.01);
-    var cp = Math.max(0.01, +r.competitor_price || p * 1.03);
-    var c = Math.max(0.01, +r.cost || p * 0.5);
-    var inv = Math.max(0, +r.inventory || 0);
-    var w = +r.is_weekend ? 1 : 0;
-    var m = Math.max(1, Math.min(12, +r.month || 1));
-    var s = +r.seasonal_factor || (SEASONAL[m] || 1);
-    var gap = cp - p;
-    return [p, cp, c, inv, w, m, s, gap];
-  }
-
-  function extFeatureVec(r) {
-    var base = featureVec(r);
-    var p = base[0], cp = base[1], c = base[2], inv = base[3], w = base[4], m = base[5], s = base[6], gap = base[7];
-    var logP = Math.log(p);
-    var logCp = Math.log(cp);
-    var pRatio = p / cp;
-    var marginPct = (p - c) / p;
-    var markupRatio = p / c;
-    var invPressure = Math.log1p(inv);
-    var sinM = Math.sin(2 * Math.PI * m / 12);
-    var cosM = Math.cos(2 * Math.PI * m / 12);
-    return [p, cp, c, inv, w, m, s, gap, logP, logCp, pRatio, marginPct, markupRatio, invPressure, sinM, cosM];
-  }
-
-  function matMul(a, b) {
-    var out = [];
-    for (var i = 0; i < a.length; i++) {
-      out[i] = [];
-      for (var j = 0; j < b[0].length; j++) {
-        var sum = 0;
-        for (var k = 0; k < b.length; k++) sum += a[i][k] * b[k][j];
-        out[i][j] = sum;
-      }
-    }
-    return out;
-  }
-  function matVec(a, v) {
-    var out = [];
-    for (var i = 0; i < a.length; i++) {
-      var sum = 0;
-      for (var k = 0; k < v.length; k++) sum += a[i][k] * v[k];
-      out[i] = sum;
-    }
-    return out;
-  }
-  function matMulTranspose(X) {
-    var n = X[0].length, out = [];
-    for (var i = 0; i < n; i++) {
-      out[i] = [];
-      for (var j = 0; j < X.length; j++) out[i][j] = X[j][i];
-    }
-    return out;
-  }
-  function solveGauss(A, b) {
-    var n = A.length, m = A.map(function (row, i) { return row.slice().concat(b[i]); });
-    for (var col = 0; col < n; col++) {
-      var piv = col;
-      for (var r2 = col + 1; r2 < n; r2++) if (Math.abs(m[r2][col]) > Math.abs(m[piv][col])) piv = r2;
-      if (Math.abs(m[piv][col]) < 1e-12) continue;
-      var tmp = m[col]; m[col] = m[piv]; m[piv] = tmp;
-      var div = m[col][col];
-      for (var j = col; j <= n; j++) m[col][j] /= div;
-      for (var r3 = 0; r3 < n; r3++) {
-        if (r3 === col) continue;
-        var f = m[r3][col];
-        for (var j2 = col; j2 <= n; j2++) m[r3][j2] -= f * m[col][j2];
-      }
-    }
-    return m.map(function (row) { return row[n]; });
-  }
-
-  function fitRidge(X, y, l2) {
-    var k = X[0].length;
-    var Xt = matMulTranspose(X);
-    var XtX = matMul(Xt, X);
-    for (var i = 1; i < k; i++) XtX[i][i] += (l2 || 1e-3);
-    var Xty = matVec(Xt, y);
-    return solveGauss(XtX, Xty);
-  }
-
-  /* Fast pure-JS Gradient Boosted Decision Trees (GBDT) */
-  function fitTreeStump(X, residuals, maxDepth) {
-    var n = X.length, nFeats = X[0].length;
-    var bestGain = -Infinity, bestFeat = 0, bestThresh = 0, bestLeftVal = 0, bestRightVal = 0;
-    var meanRes = 0;
-    for (var i = 0; i < n; i++) meanRes += residuals[i];
-    meanRes /= Math.max(1, n);
-
-    for (var f = 0; f < nFeats; f++) {
-      var vals = [];
-      for (var i2 = 0; i2 < n; i2++) vals.push(X[i2][f]);
-      vals.sort(function (a, b) { return a - b; });
-      var step = Math.max(1, Math.floor(n / 10));
-      for (var sIdx = step; sIdx < n; sIdx += step) {
-        var thresh = vals[sIdx];
-        var lSum = 0, lCount = 0, rSum = 0, rCount = 0;
-        for (var i3 = 0; i3 < n; i3++) {
-          if (X[i3][f] <= thresh) { lSum += residuals[i3]; lCount++; }
-          else { rSum += residuals[i3]; rCount++; }
-        }
-        if (lCount < 2 || rCount < 2) continue;
-        var lMean = lSum / lCount, rMean = rSum / rCount;
-        var gain = lSum * lMean + rSum * rMean;
-        if (gain > bestGain) {
-          bestGain = gain; bestFeat = f; bestThresh = thresh;
-          bestLeftVal = lMean; bestRightVal = rMean;
-        }
-      }
-    }
-    if (bestGain === -Infinity) {
-      return { predict: function () { return meanRes; } };
-    }
-    return {
-      predict: function (row) {
-        return row[bestFeat] <= bestThresh ? bestLeftVal : bestRightVal;
-      }
-    };
-  }
-
-  function trainGBDT(X, y, nTrees, lr) {
-    var n = X.length;
-    var trees = [];
-    var yMean = 0;
-    for (var i = 0; i < n; i++) yMean += y[i];
-    yMean /= Math.max(1, n);
-    var preds = [];
-    for (var i2 = 0; i2 < n; i2++) preds.push(yMean);
-
-    for (var t = 0; t < nTrees; t++) {
-      var residuals = [];
-      for (var i3 = 0; i3 < n; i3++) residuals.push(y[i3] - preds[i3]);
-      var tree = fitTreeStump(X, residuals);
-      trees.push(tree);
-      for (var i4 = 0; i4 < n; i4++) {
-        preds[i4] += lr * tree.predict(X[i4]);
-      }
-    }
-    return {
-      predict: function (row) {
-        var res = yMean;
-        for (var t2 = 0; t2 < trees.length; t2++) res += lr * trees[t2].predict(row);
-        return Math.max(0, res);
-      }
-    };
-  }
-
-  function trainModel(rows) {
-    var t0 = now();
-    var n = rows.length;
-
-    /* 1. Deterministic out-of-sample 80/20 train/test split */
-    var rnd = mulberry(777);
-    var test = [], train = [];
-    rows.forEach(function (r) { (rnd() < 0.2 ? test : train).push(r); });
-    if (!test.length) {
-      test = train.slice(0, Math.max(1, Math.floor(train.length * 0.2)));
-      train = train.slice(test.length);
-    }
-    if (!train.length) train = test.slice();
-
-    var nTrain = train.length, nTest = test.length;
-
-    /* 2. Compute normalisation scalers ONLY on train set */
-    var mean = {}, std = {};
-    var f, i;
-    for (f = 0; f < FEATURES.length; f++) {
-      mean[f] = 0; std[f] = 0;
-      var vals = train.map(function (r) { return featureVec(r)[f]; });
-      vals.forEach(function (v) { mean[f] += v; });
-      mean[f] /= nTrain;
-      vals.forEach(function (v) { std[f] += (v - mean[f]) * (v - mean[f]); });
-      std[f] = Math.sqrt(std[f] / nTrain) || 1;
-    }
-    var yMean = train.reduce(function (a, r) { return a + r.units_sold; }, 0) / Math.max(1, nTrain);
-
-    /* 3. Build Standard Scaled Feature Matrix X_train */
-    var X_train = [], y_train = [];
-    train.forEach(function (r) {
-      var fv = featureVec(r);
-      var xr = [1];
-      for (f = 0; f < FEATURES.length; f++) xr.push((fv[f] - mean[f]) / std[f]);
-      X_train.push(xr);
-      y_train.push(r.units_sold);
-    });
-
-    /* 4. Model 1: Baseline Linear Ridge Regressor */
-    var coef = fitRidge(X_train, y_train, 1e-3);
-    var predictLinearScaled = function (zr) {
-      var xr = [1];
-      for (f = 0; f < FEATURES.length; f++) xr.push((zr[f] - mean[f]) / std[f]);
-      var s = 0;
-      for (i = 0; i < xr.length; i++) s += coef[i] * xr[i];
-      return Math.max(0, s);
-    };
-
-    /* 5. Model 2: Economic Log-Log Price Elasticity Regressor */
-    var y_log_train = train.map(function (r) { return Math.log1p(Math.max(0, r.units_sold)); });
-    var coefLog = fitRidge(X_train, y_log_train, 1e-2);
-    var predictLogLogScaled = function (zr) {
-      var xr = [1];
-      for (f = 0; f < FEATURES.length; f++) xr.push((zr[f] - mean[f]) / std[f]);
-      var s = 0;
-      for (i = 0; i < xr.length; i++) s += coefLog[i] * xr[i];
-      return Math.max(0, Math.expm1(s));
-    };
-
-    /* 6. Model 3: Pure-JS Gradient Boosted Decision Trees (GBDT) */
-    var gbdt = trainGBDT(X_train, y_train, 25, 0.08);
-    var predictGBDTScaled = function (zr) {
-      var xr = [1];
-      for (f = 0; f < FEATURES.length; f++) xr.push((zr[f] - mean[f]) / std[f]);
-      return gbdt.predict(xr);
-    };
-
-    /* 7. Model 4: Weighted Ensemble Blending */
-    var predictEnsembleScaled = function (zr) {
-      var p1 = predictLinearScaled(zr);
-      var p2 = predictLogLogScaled(zr);
-      var p3 = predictGBDTScaled(zr);
-      return Math.max(0, 0.3 * p1 + 0.35 * p2 + 0.35 * p3);
-    };
-
-    /* 8. Holdout Validation Tournament strictly on test partition */
-    function evalModel(predictFn) {
-      var ssRes = 0, ssTot = 0, mae = 0, rmse = 0;
-      test.forEach(function (r) {
-        var p = predictFn(featureVec(r));
-        var e = p - r.units_sold;
-        ssRes += e * e; mae += Math.abs(e); rmse += e * e;
-        ssTot += (r.units_sold - yMean) * (r.units_sold - yMean);
-      });
-      var r2 = ssTot > 0 ? 1 - ssRes / ssTot : (nTest > 0 ? 1 : 0);
-      return {
-        r2: Math.round(r2 * 1000) / 1000,
-        mae: Math.round((mae / Math.max(1, nTest)) * 100) / 100,
-        rmse: Math.round(Math.sqrt(rmse / Math.max(1, nTest)) * 100) / 100,
-      };
-    }
-
-    var mLinear = evalModel(predictLinearScaled);
-    var mLog = evalModel(predictLogLogScaled);
-    var mGBDT = evalModel(predictGBDTScaled);
-    var mEnsemble = evalModel(predictEnsembleScaled);
-
-    var tournament = [
-      { name: "Weighted Ensemble", backbone: "ensemble", r2: mEnsemble.r2, mae: mEnsemble.mae, rmse: mEnsemble.rmse },
-      { name: "Gradient Boosted Trees (GBDT)", backbone: "gbdt", r2: mGBDT.r2, mae: mGBDT.mae, rmse: mGBDT.rmse },
-      { name: "Log-Log Elasticity Regressor", backbone: "log-log", r2: mLog.r2, mae: mLog.mae, rmse: mLog.rmse },
-      { name: "Linear Regression (ridge)", backbone: "client-linreg", r2: mLinear.r2, mae: mLinear.mae, rmse: mLinear.rmse },
-    ];
-    tournament.sort(function (a, b) { return (a.rmse - b.rmse) || (b.r2 - a.r2); });
-    tournament[0].isBest = true;
-
-    // Pick best model for primary predictions
-    var activePredictScaled = predictLinearScaled;
-    if (tournament[0].backbone === "ensemble") activePredictScaled = predictEnsembleScaled;
-    else if (tournament[0].backbone === "gbdt") activePredictScaled = predictGBDTScaled;
-    else if (tournament[0].backbone === "log-log") activePredictScaled = predictLogLogScaled;
-
-    var predict = function (r) { return activePredictScaled(featureVec(r)); };
-
-    var coefMap = {};
-    for (f = 0; f < FEATURES.length; f++) coefMap[FEATURES[f]] = coef[f + 1] / std[f];
-
-    // Estimated overall price elasticity from log-log model
-    var estElasticity = coefLog[1] ? -Math.abs(coefLog[1] / std[0]) : -1.25;
-
-    return {
-      backbone: "client-linreg",
-      name: "Linear Regression (ridge)",
-      championName: tournament[0].name,
-      features: FEATURES.slice(),
-      mean: mean, std: std, coef: coef, coefMap: coefMap,
-      r2: Math.max(mLinear.r2, Math.min(1.0, tournament[0].r2)),
-      mae: tournament[0].mae,
-      rmse: tournament[0].rmse,
-      elasticity: Math.round(estElasticity * 100) / 100,
-      tournament: tournament,
-      trainSize: nTrain, testSize: nTest, yMean: yMean,
-      trainingTimeMs: Math.round((now() - t0) * 10) / 10,
-      status: "trained", trainedAt: new Date().toISOString(),
-      predict: predict, predictFeatures: activePredictScaled,
-      predictLinear: predictLinearScaled, predictLogLog: predictLogLogScaled,
-      predictGBDT: predictGBDTScaled, predictEnsemble: predictEnsembleScaled,
-    };
-  }
 
   /* ------------------------------------------------------------------ */
   /* analytics                                                          */
@@ -804,66 +514,6 @@
     return report;
   }
 
-  /* Dynamic pricing recommendation reasons (requirement #9). Evaluates
-   * demand, inventory, competitor price, season and margin for a product
-   * and returns human-readable factors that explain the recommendation. */
-  function recommendReasons(product, opts) {
-    opts = opts || {};
-    var reasons = [];
-    var inv = opts.inventory != null ? opts.inventory : (product ? product.inventory : 50);
-    var comp = opts.competitor_price != null ? opts.competitor_price : (product ? product.competitor_price : null);
-    var base = product ? product.base_price : (opts.price != null ? opts.price : 50);
-    var cost = product ? product.cost : (opts.cost != null ? opts.cost : base * 0.5);
-    var rec = optimizePrice(product || { product_id: "MANUAL", base_price: base, cost: cost, competitor_price: comp || base * 1.03, inventory: inv }, opts);
-
-    /* inventory */
-    if (inv <= 20) reasons.push({ icon: "↑", tone: "up", text: "Low inventory (" + inv + " units) lets us raise the price to protect margin." });
-    else if (inv >= 200) reasons.push({ icon: "↓", tone: "down", text: "High inventory (" + inv + " units) supports a lower price to move stock." });
-    else reasons.push({ icon: "→", tone: "flat", text: "Inventory level (" + inv + " units) is balanced — no inventory-driven change needed." });
-
-    /* competitor */
-    if (comp != null) {
-      var gap = (comp - rec.recommended_price) / rec.recommended_price;
-      if (gap > 0.05) reasons.push({ icon: "↗", tone: "up", text: "Competitors price at " + fmtMoney(comp) + ", " + Math.round(gap * 100) + "% above ours — room to raise the price." });
-      else if (gap < -0.05) reasons.push({ icon: "↘", tone: "down", text: "Competitors price at " + fmtMoney(comp) + ", " + Math.round(Math.abs(gap) * 100) + "% below ours — stay competitive." });
-      else reasons.push({ icon: "→", tone: "flat", text: "Our price is aligned with the competitor price of " + fmtMoney(comp) + "." });
-    }
-
-    /* season */
-    var month = +opts.month || new Date().getMonth() + 1;
-    var season = SEASONAL[month] || 1;
-    if (season > 1.2) reasons.push({ icon: "↗", tone: "up", text: "Peak season (" + MONTH_NAMES[month - 1] + ", factor " + season + ") justifies a higher price." });
-    else if (season < 0.9) reasons.push({ icon: "↘", tone: "down", text: "Off-peak season (" + MONTH_NAMES[month - 1] + ", factor " + season + ") — a lower price keeps sales moving." });
-
-    /* margin */
-    var margin = (rec.recommended_price - cost) / rec.recommended_price;
-    if (margin > 0.55) reasons.push({ icon: "✓", tone: "up", text: "Healthy margin (" + Math.round(margin * 100) + "%) at the recommended price of " + fmtMoney(rec.recommended_price) + "." });
-    else if (margin < 0.2) reasons.push({ icon: "!", tone: "down", text: "Tight margin (" + Math.round(margin * 100) + "%) — the recommendation protects the cost floor of " + fmtMoney(cost) + "." });
-
-    return {
-      recommended_price: rec.recommended_price,
-      reasons: reasons,
-      base: base,
-      delta_pct: Math.round((rec.recommended_price - base) / base * 1000) / 10,
-    };
-  }
-
-  /* Prediction table for the whole catalogue (requirement #2: clear results
-   * table + CSV download). */
-  function predictionTable() {
-    var a = computeIfNeeded();
-    if (!a) return [];
-    return a.productList.map(function (p) {
-      var rec = optimizePrice(p, {});
-      return {
-        product_id: p.product_id, category: p.category,
-        base_price: p.base_price, recommended_price: rec.recommended_price,
-        price_change_pct: Math.round((rec.recommended_price - p.base_price) / p.base_price * 1000) / 10,
-        expected_demand: rec.expected_demand, expected_revenue: rec.expected_revenue,
-      };
-    });
-  }
-
   function pad2(n) { return (n < 10 ? "0" : "") + n; }
   function argmax(obj) {
     var best = null, bestV = -Infinity;
@@ -884,174 +534,6 @@
     return out;
   }
 
-  /* ------------------------------------------------------------------ */
-  /* price optimisation (dataset-driven)                                */
-  /* ------------------------------------------------------------------ */
-  function optimizePrice(product, opts) {
-    opts = opts || {};
-    var analytics = computeIfNeeded();
-    var model = analytics ? analytics.model : null;
-    var press = opts.demand_pressure != null ? opts.demand_pressure : 0.5;
-    var inv = opts.inventory != null ? opts.inventory : (product ? product.inventory : 50);
-    var comp = opts.competitor_price != null ? opts.competitor_price : (product ? product.competitor_price : product.base_price * 1.03);
-    var base = product ? product.base_price : 50;
-    var cost = product ? product.cost : base * 0.5;
-
-    var demandAt = function (p) {
-      var feats = [p, comp, cost, inv, 0, new Date().getMonth() + 1, SEASONAL[new Date().getMonth() + 1] || 1, comp - p];
-      var d = model ? model.predictFeatures(feats) : (40 - (p - base) * 0.2 + (comp - p) * 0.05);
-      d = d * (0.85 + 0.3 * press);
-      return Math.max(0, d);
-    };
-    var lo = Math.max(0.01, cost * 1.02), hi = Math.max(base * 1.2, comp * 1.05);
-    var steps = 120, best = null, bestObj = -Infinity;
-    var revenueMode = opts.objective !== "profit";
-    for (var i = 0; i <= steps; i++) {
-      var p = lo + (hi - lo) * i / steps;
-      var dem = Math.min(demandAt(p), inv);
-      var objVal = revenueMode ? p * dem : (p - cost) * dem;
-      if (objVal > bestObj) { bestObj = objVal; best = { p: p, dem: dem }; }
-    }
-    var rec = Math.round(best.p * 100) / 100;
-    var dem = Math.round(best.dem * 10) / 10;
-    var revenue = Math.round(rec * best.dem * 100) / 100;
-    var profit = Math.round((rec - cost) * best.dem * 100) / 100;
-    return {
-      product_id: product ? product.product_id : "P000",
-      recommended_price: rec, cost: Math.round(cost * 100) / 100,
-      expected_demand: dem, expected_revenue: revenue,
-      expected_profit: profit, objective: revenueMode ? "revenue" : "profit",
-      competitor_price: Math.round(comp * 100) / 100,
-      inventory: Math.round(inv), currency: CURRENCY_CODE,
-      price_change_pct: Math.round((rec - base) / base * 1000) / 10,
-    };
-  }
-
-  function manualPredict(fields) {
-    var analytics = computeIfNeeded();
-    var model = analytics ? analytics.model : null;
-    var price = +fields.price, cost = +fields.cost;
-    var comp = fields.competitor || price * 1.03;
-    var inv = fields.inventory != null ? fields.inventory : 50;
-    var press = fields.demand_pressure != null ? fields.demand_pressure : 0.5;
-    var eff = price * (1 - (fields.discount_pct || 0) / 100);
-    var month = +fields.month || new Date().getMonth() + 1;
-    var seasonal = SEASONAL[month] || 1;
-    var weekend = +fields.weekend || 0;
-
-    var demandAt = function (p, extra) {
-      var feats = [p, comp, cost, inv, weekend, month, seasonal, comp - p];
-      var d = model ? model.predictFeatures(feats) : (18 + 24 * press + (comp - p) * 0.05);
-      d = d * (0.85 + 0.3 * press);
-      return Math.max(0, d);
-    };
-    /* Allow an explicit observed demand (units) to override the model for the
-     * "current" scenario while the optimum still uses the trained model. */
-    var observed = fields.demand != null ? +fields.demand : null;
-    var rawD = observed != null ? observed : demandAt(eff);
-    var demand = Math.min(Math.round(rawD * 10) / 10, inv);
-
-    /* grid search for the optimal (revenue-max) price */
-    var lo = cost * 1.02, hi = Math.max(eff * 1.2, comp * 1.05);
-    var best = null, bestScore = -1;
-    for (var i = 0; i <= 100; i++) {
-      var p = lo + (hi - lo) * i / 100;
-      var d = Math.min(demandAt(p), inv);
-      var s = p * d;
-      if (s > bestScore) { bestScore = s; best = { p: p, d: d }; }
-    }
-    var rec = Math.round(best.p * 100) / 100;
-    var optDemand = Math.round(best.d * 10) / 10;
-    var revenue = Math.round(eff * demand * 100) / 100;
-    var profit = Math.round((eff - cost) * demand * 100) / 100;
-
-    /* feature impacts from the model */
-    var baseD = Math.max(0.001, demandAt(eff));
-    var impacts = [];
-    var deltas = [
-      { feature: "price", label: "raising price 10%", f: function () { return demandAt(eff * 1.1); } },
-      { feature: "competitor_price", label: "competitor +10%", f: function () { return demandAt(eff, comp * 1.1); } },
-      { feature: "inventory", label: "stock +50%", f: function () { var d = demandAt(eff); return Math.min(d * 1.02, inv * 1.5); } },
-      { feature: "weekend", label: "weekday → weekend", f: function () { return demandAt(eff) * 1.12; } },
-    ];
-    deltas.forEach(function (dx) {
-      var nv = dx.f();
-      impacts.push({ feature: dx.feature, label: dx.label, impact_pct: Math.round(((nv - baseD) / baseD) * 1000) / 10 });
-    });
-
-    var confBase = 35;
-    if (model) confBase = Math.min(85, 45 + Math.round(model.r2 * 55));
-    var confidence = price > 0 && cost > 0 ? confBase : 30;
-
-    var grid = [0, 5, 10, 15, 20].map(function (d) {
-      var p = price * (1 - d / 100);
-      var gd = Math.min(Math.round(demandAt(p) * 10) / 10, inv);
-      return { discount: d, price: Math.round(p * 100) / 100, demand: gd };
-    });
-
-    var reasons = recommendReasons(null, {
-      price: eff, cost: cost, inventory: inv, competitor_price: comp,
-      demand_pressure: press, month: month,
-    });
-
-    return {
-      input: fields,
-      current: { price: Math.round(eff * 100) / 100, demand: demand, revenue: revenue, profit: profit, margin_pct: eff > 0 ? Math.round((eff - cost) / eff * 1000) / 10 : 0 },
-      optimal: {
-        recommended_price: rec, demand: optDemand,
-        revenue: Math.round(rec * best.d * 100) / 100,
-        profit: Math.round((rec - cost) * best.d * 100) / 100,
-        price_delta_pct: +(((rec - eff) / (eff || 1)) * 100).toFixed(1),
-      },
-      discount_grid: grid,
-      feature_impacts: impacts,
-      reasons: reasons.reasons,
-      confidence_pct: confidence,
-      model: model ? { name: "Linear Regression (ridge)", backbone: model.backbone, r2: model.r2, mae: model.mae, rmse: model.rmse } : null,
-      currency: CURRENCY_CODE,
-    };
-  }
-
-  function rlPrice(opts) {
-    var product = productById(opts.product_id);
-    if (!product) product = { product_id: opts.product_id, base_price: 50, cost: 25, competitor_price: 51.5, inventory: 50, category: "General" };
-    var rec = optimizePrice(product, opts);
-    var press = opts.demand_pressure != null ? opts.demand_pressure : 0.5;
-    var mults = [0.85, 0.92, 1.0, 1.08, 1.15];
-    var idx = Math.max(0, Math.min(4, Math.round(press * 4)));
-    var price = Math.round(rec.recommended_price * mults[idx] * 100) / 100;
-    return {
-      method: "rl",
-      product_state: { inventory: opts.inventory != null ? opts.inventory : 50, demand_pressure: press, competitor_gap: Math.round((rec.competitor_price - rec.recommended_price) / rec.recommended_price * 100) / 100 },
-      action_index: idx, action_multiplier: mults[idx],
-      price: price,
-      q_values: mults.map(function (m) { return Math.round((10000 + (m - 1) * 8000) * 100) / 100; }),
-      learning_steps: 2000,
-    };
-  }
-
-  function negotiate(opts) {
-    var product = productById(opts.product_id) || { product_id: "P001", base_price: 50, cost: 25 };
-    var cust = customerById(opts.customer_id) || { loyalty_score: 50, purchase_count: 10, avg_sales: 3, segment_label: "Regular", loyalty_tier: "Bronze" };
-    var press = opts.demand_pressure != null ? opts.demand_pressure : 0.5;
-    var rec = optimizePrice(product, opts).recommended_price;
-    var discount = Math.max(0.04, Math.min(0.35, 0.05 + 0.12 * press + (100 - cust.loyalty_score) * 0.003));
-    var final = Math.round(rec * (1 - discount) * 100) / 100;
-    var agreed = true, note = null;
-    if (opts.max_budget && final > opts.max_budget) {
-      var need = 1 - opts.max_budget / rec;
-      if (need <= 0.4) { discount = need + 0.01; final = Math.round(rec * (1 - discount) * 100) / 100; note = "countered to match customer budget"; }
-      else { agreed = false; note = "customer budget below profitable floor"; }
-    }
-    return {
-      agreed: agreed, rounds: 1, final_price: final,
-      discount_pct: Math.round(discount * 1000) / 10,
-      customer_segment: cust.segment_label, loyalty_tier: cust.loyalty_tier,
-      savings: Math.round((rec - final) * 100) / 100, budget: opts.max_budget || null,
-      transcript: [{ round: 1, customer_ask_discount: 0.12, agent_offer_discount: Math.round(discount * 1000) / 1000, accepted: agreed, note: note }],
-    };
-  }
-
   function salesSeries(pid) {
     var analytics = computeIfNeeded();
     if (!analytics) return { product_id: pid, dates: [], units_sold: [] };
@@ -1064,51 +546,6 @@
       units_sold: days.map(function (d) { return prod.daily[d].units; }),
       revenue: days.map(function (d) { return Math.round(prod.daily[d].revenue); }),
     };
-  }
-
-  function explain() {
-    var analytics = computeIfNeeded();
-    var m = analytics ? analytics.model : null;
-    var top = [];
-    if (m) {
-      top = FEATURES.slice().sort(function (a, b) { return Math.abs(m.coefMap[b]) - Math.abs(m.coefMap[a]); })
-        .slice(0, 5).map(function (f) { return f; });
-    }
-    return { top_features: top.length ? top : ["is_weekend", "month", "seasonal_factor", "price", "inventory"] };
-  }
-
-  function synthCustomers(n) {
-    var rnd = mulberry(20260201);
-    var labels = [["Premium", "Gold"], ["Loyal", "Silver"], ["Regular", "Bronze"], ["Bargain seeker", "New"]];
-    var out = [];
-    for (var i = 1; i <= n; i++) {
-      var bucket = labels[i % labels.length];
-      var loyalty = Math.max(5, Math.min(97, Math.round(5 + rnd() * 92)));
-      out.push({
-        customer_id: "c-" + String(i).padStart(3, "0"),
-        loyalty_score: loyalty, purchase_count: Math.round(2 + rnd() * 44),
-        avg_sales: Math.round((1 + rnd() * 10) * 10) / 10,
-        segment_label: bucket[0], loyalty_tier: bucket[1],
-        region: ["North", "West", "South", "East"][i % 4],
-        preferred_category: SYNTH_CATEGORIES[i % SYNTH_CATEGORIES.length],
-      });
-    }
-    return out;
-  }
-
-  function customerById(id) {
-    var state = getState();
-    if (!state._customers) state._customers = synthCustomers(state.analytics ? state.analytics.segments_total : 50);
-    return state._customers.find(function (c) { return c.customer_id === id; }) || null;
-  }
-
-  function customerList() {
-    var state = getState();
-    if (!state._customers) {
-      var a = computeIfNeeded();
-      state._customers = synthCustomers(a ? a.segments_total : 50);
-    }
-    return state._customers;
   }
 
   function productById(pid) {
@@ -1134,15 +571,6 @@
       " units) and are weakest in " + MONTH_NAMES[+a.worst_month - 1] + ".");
     if (a.holiday_impact_pct) parts.push("Holiday periods lift average sales by " + a.holiday_impact_pct + "% vs. normal days, and weekends average " +
       a.weekend_units + " units/day vs " + a.weekday_units + " on weekdays.");
-    var m = a.model;
-    if (m) parts.push("A client-side " + m.name + " model reached R² " + m.r2 + " (MAE " + m.mae + " units) in " + m.trainingTimeMs + " ms across " + m.features.length + " features.");
-    var best = a.productList.length ? optimizePrice(a.productList[0], {}) : null;
-    if (best) {
-      var base = a.productList[0].base_price;
-      var delta = Math.round((best.recommended_price - base) / base * 1000) / 10;
-      parts.push("For " + a.productList[0].product_id + ", revenue is expected to " + (delta >= 0 ? "increase" : "decrease") +
-        " by " + Math.abs(delta) + "% if the recommended price (" + fmtMoney(best.recommended_price) + ") is applied.");
-    }
     return parts.join(" ");
   }
 
@@ -1163,7 +591,7 @@
     if (!state.normalized) return null;
     if (!state.analytics) {
       state.missing = { totalMissing: 0, byColumn: {} };
-      state.analytics = computeAnalytics(state.normalized, trainModel(state.normalized));
+      state.analytics = computeAnalytics(state.normalized, null);
     }
     return state.analytics;
   }
@@ -1193,18 +621,6 @@
     return lines.join("\n");
   }
 
-  function exportPredictions() {
-    var a = computeIfNeeded();
-    var headers = ["product_id", "category", "base_price", "cost", "recommended_price", "expected_revenue", "price_change_pct", "current_revenue", "current_profit"];
-    if (!a) return { csv: toCSV(headers, []), name: "smart-pricing-predictions-" + new Date().toISOString().slice(0, 10) + ".csv" };
-    var rows = a.productList.map(function (p) {
-      var rec = optimizePrice(p, {});
-      return [p.product_id, p.category, p.base_price, p.cost, rec.recommended_price, rec.expected_revenue,
-      Math.round((rec.recommended_price - p.base_price) / p.base_price * 1000) / 10, p.revenue, p.profit];
-    });
-    return { csv: toCSV(headers, rows), name: "smart-pricing-predictions-" + new Date().toISOString().slice(0, 10) + ".csv" };
-  }
-
   function download(filename, text) {
     if (typeof document === "undefined") return;
     var blob = new Blob(["\uFEFF" + text], { type: "text/csv;charset=utf-8;" });
@@ -1224,11 +640,8 @@
     basicStats: basicStats,
     countDuplicates: countDuplicates,
     datasetReport: datasetReport,
-    recommendReasons: recommendReasons,
-    predictionTable: predictionTable,
     MONTH_NAMES: MONTH_NAMES,
     SEASONAL: SEASONAL,
-    mulberry: mulberry,
     REQUIRED_FIELDS: REQUIRED_FIELDS,
     SYNONYMS: SYNONYMS,
     parseCSV: parseCSV,
@@ -1238,16 +651,10 @@
     normalizeRows: normalizeRows,
     cleanRows: cleanRows,
     computeAnalytics: computeAnalytics,
-    trainModel: trainModel,
-    optimizePrice: optimizePrice,
-    manualPredict: manualPredict,
-    rlPrice: rlPrice,
-    negotiate: negotiate,
     salesSeries: salesSeries,
-    explain: explain,
     insightText: insightText,
     productById: productById,
-    customerList: customerList,
+    dateKey: dayKey,
     getState: getState,
     source: function () { return state.source; },
     active: function () { return state.source === "upload"; },
@@ -1258,7 +665,6 @@
     applyUpload: applyUpload,
     refreshModel: refreshModel,
     toCSV: toCSV,
-    exportPredictions: exportPredictions,
     download: download,
   };
 

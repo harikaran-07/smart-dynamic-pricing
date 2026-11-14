@@ -1,11 +1,13 @@
-/* Node harness for the new data pipeline (engine.js):
+/* Node harness for the data pipeline (engine.js):
  *   - empty state until a dataset is uploaded (no built-in demo data)
  *   - CSV parsing, column detection/mapping, validation
  *   - normalisation + cleaning (missing values)
  *   - analytics aggregation (monthly, seasonal, profit, inventory)
- *   - client-side model training metrics (R²/MAE/RMSE/time)
- *   - price optimisation, manual prediction, RL, negotiation
- *   - insight text + CSV export
+ *   - client-side model metrics for the analytics cards (no price recommendations)
+ *   - insight text + CSV helpers
+ *
+ * Price recommendation, RL, negotiation and synthetic customers were removed
+ * from the browser; those live in the backend and are covered by pytest.
  */
 "use strict";
 const P = require("../dashboard/engine.js");
@@ -15,17 +17,24 @@ function assert(cond, msg) {
   if (!cond) { console.error("  ✗ " + msg); fails++; }
   else console.log("  ✓ " + msg);
 }
-function approx(a, b, tol, msg) {
-  assert(Math.abs(a - b) <= tol, msg + " (" + a + " ≈ " + b + ")");
-}
 
 // ---- empty state until upload (no built-in demo data) ----------------
 assert(P.source() === "" && !P.active(), "engine starts empty (no demo data)");
 assert(P.analytics() === null, "no analytics before a dataset is uploaded");
 assert(P.rows() === null, "no rows before upload");
-assert(P.predictionTable().length === 0, "empty prediction table before upload");
 assert(P.insightText(null) === "", "insightText handles null analytics");
 assert(P.report() === null || P.report().size === 0, "empty report before upload");
+
+// ---- removed browser-side pricing is really gone --------------------
+assert(typeof P.manualPredict === "undefined", "manualPredict removed from the browser");
+assert(typeof P.rlPrice === "undefined", "rlPrice removed from the browser");
+assert(typeof P.negotiate === "undefined", "negotiate removed from the browser");
+assert(typeof P.synthCustomers === "undefined", "synthetic customers removed");
+assert(typeof P.optimizePrice === "undefined", "client price optimisation removed");
+assert(typeof P.predictionTable === "undefined", "client prediction table removed");
+assert(typeof P.customerList === "undefined", "customerList removed");
+assert(typeof P.exportPredictions === "undefined", "client prediction export removed");
+assert(typeof P.dateKey === "function", "dateKey exposed for backend rows");
 
 // ---- CSV parsing ----------------------------------------------------
 const csv = 'product_id,date,price,cost,units_sold\n' +
@@ -54,6 +63,7 @@ assert(norm.rows.length === 3, "all rows normalised (" + norm.rows.length + ")")
 assert(norm.rows.every(r => r.units_sold > 0 && r.price > 0 && r.cost > 0), "normalised rows carry numeric price/cost/units");
 assert(norm.rows[1].month === 6 && norm.rows[1].date.d === 15, "day-first dd/mm/yyyy parsed (15/06/2026)");
 assert(norm.rows[2].month === 11 && norm.rows[2].holiday === 1, "month-derived holiday flagged for November");
+assert(P.dateKey(norm.rows[1]) === "2026-06-15", "dateKey gives the ISO date for backend rows");
 const messy = P.normalizeRows(parsed.rows.concat([{ product_id: "P004", date: "2026-01-08", price: "bad", cost: "9", units_sold: "5" }]), fullMap);
 assert(messy.rows.length === 3, "rows with invalid price are dropped during normalisation");
 
@@ -71,40 +81,26 @@ P.applyUpload(upRows, { fileName: "t.csv", headers: parsed.headers, rowsParsed: 
 assert(P.active() && P.source() === "upload", "uploaded dataset becomes the active source");
 const a = P.analytics();
 assert(a.records === 3 && a.products === 3, "analytics record/product counts from uploaded data");
-assert(typeof a.model.r2 === "number" && a.model.r2 >= -1 && a.model.r2 <= 1, "model R² in valid range (" + a.model.r2 + ")");
-assert(a.model.mae >= 0 && a.model.rmse >= 0, "model MAE/RMSE non-negative");
-assert(a.model.trainingTimeMs >= 0, "training time recorded (" + a.model.trainingTimeMs + " ms)");
+assert(a.model === null, "browser trains no model (backend is the only model source)");
+assert(typeof P.trainModel === "undefined", "no client-side model trainer is exported");
+assert(typeof P.explain === "undefined", "no client-side coefficient explanation is exported");
 assert(a.best_month && a.monthly_sales[a.best_month] > 0, "best month identified");
 assert(Array.isArray(a.top_profit) && a.top_profit.length, "top profit ranking present");
 assert(a.low_stock && a.overstock && Array.isArray(a.inventory), "inventory risk flags present");
 assert(a.segments && typeof a.segments.Premium === "number", "customer segments present");
+assert(!a.productList.some(p => "recommended_price" in p), "analytics products carry no browser-computed price");
 
-// ---- price optimisation / manual / rl / negotiate / sales / explain ----
-const prod = a.productList[0];
-const rec = P.optimizePrice(prod, { inventory: 100, demand_pressure: 0.5 });
-assert(rec.recommended_price > 0 && rec.expected_revenue > 0, "optimisePrice returns a positive recommendation");
-assert(rec.product_id === prod.product_id, "optimisePrice scoped to the right product");
-const man = P.manualPredict({ price: 49.99, cost: 22, inventory: 50, competitor: 55, discount_pct: 0, demand_pressure: 0.5, month: 11, weekend: 1 });
-assert(man.current.demand >= 0 && man.current.revenue > 0, "manual prediction computes current scenario");
-assert(man.optimal.recommended_price > 0 && typeof man.optimal.price_delta_pct === "number", "manual prediction computes optimal");
-assert(man.discount_grid.length === 5 && man.feature_impacts.length >= 3, "manual discount grid + feature impacts present");
-assert(Number.isInteger(man.confidence_pct), "manual confidence_pct integer");
-const rl = P.rlPrice({ product_id: prod.product_id, inventory: 50, demand_pressure: 0.5 });
-assert(rl.price > 0 && rl.action_index >= 0 && rl.q_values.length === 5, "rlPrice returns an action");
-const neg = P.negotiate({ customer_id: "c-001", product_id: prod.product_id, demand_pressure: 0.5 });
-assert(typeof neg.agreed === "boolean" && neg.final_price > 0, "negotiate returns a deal");
-const sales = P.salesSeries(prod.product_id);
+// ---- sales series ------------------------------------------------------
+const sales = P.salesSeries(a.productList[0].product_id);
 assert(Array.isArray(sales.units_sold) && sales.units_sold.length, "salesSeries returns daily units");
-const ex = P.explain();
-assert(Array.isArray(ex.top_features) && ex.top_features.length, "explain returns top features");
 
-// ---- insight text + export --------------------------------------------
+// ---- insight text + CSV helpers ---------------------------------------
 const txt = P.insightText(a);
-assert(/sales records/.test(txt) && /products/.test(txt) && /recommended price/.test(txt), "AI summary covers records/products/recommendation");
+assert(/sales records/.test(txt) && /products/.test(txt), "AI summary covers records/products");
 assert(/uploaded dataset/.test(txt), "insight text names the uploaded dataset");
-const exp = P.exportPredictions();
-assert(/product_id/.test(exp.csv) && exp.csv.split("\n").length === a.products + 1, "export CSV has header + one row per product");
-assert(/smart-pricing-predictions/.test(exp.name), "export filename names the predictions file");
+assert(!/recommended price/.test(txt), "insight text makes no price recommendation");
+const csvOut = P.toCSV(["a", "b"], [[1, "x,y"]]);
+assert(csvOut.split("\n").length === 2 && /"x,y"/.test(csvOut), "toCSV quotes commas");
 
 // ---- currency support (USD / INR / EUR / GBP) ------------------------
 const curInr = P.setCurrency("INR", 83);
@@ -129,24 +125,5 @@ assert(rep.stats.price.min <= rep.stats.price.max, "report price min ≤ max");
 assert(rep.stats.units_sold.avg > 0, "report units average present");
 assert(Array.isArray(rep.preview) && rep.preview.length >= 1, "report includes dataset preview");
 assert(rep.preview[0].product_id && typeof rep.preview[0].price === "number", "preview rows carry product + price");
-
-// ---- recommendation reasons ------------------------------------------
-const rr = P.recommendReasons(prod, { inventory: 50, demand_pressure: 0.5, month: 11 });
-assert(Array.isArray(rr.reasons) && rr.reasons.length >= 3, "recommendReasons returns explanations (" + rr.reasons.length + ")");
-assert(rr.reasons.every(r => r.text && r.tone), "each reason has text + tone");
-assert(rr.recommended_price > 0 && typeof rr.delta_pct === "number", "recommendReasons returns price + delta");
-const rrHigh = P.recommendReasons(prod, { inventory: 10, demand_pressure: 0.9 });
-assert(rrHigh.reasons.some(r => r.tone === "up"), "low inventory + high pressure produces upward reasons");
-
-// ---- prediction table --------------------------------------------------
-const ptab = P.predictionTable();
-assert(ptab.length === a.products, "predictionTable covers every product (" + ptab.length + ")");
-assert(ptab[0].recommended_price > 0 && typeof ptab[0].price_change_pct === "number", "prediction rows carry recommendation + change");
-
-// ---- manual predict reasons + model ------------------------------------
-const manR = P.manualPredict({ price: 49.99, cost: 22, inventory: 50, competitor: 55, demand_pressure: 0.5, month: 11 });
-assert(Array.isArray(manR.reasons) && manR.reasons.length >= 3, "manual prediction includes dynamic reasons");
-assert(manR.model && manR.model.name === "Linear Regression (ridge)", "manual prediction reports the model used");
-assert(manR.optimal.recommended_price > 0, "manual prediction optimal preserved");
 
 process.exit(fails ? 1 : 0);

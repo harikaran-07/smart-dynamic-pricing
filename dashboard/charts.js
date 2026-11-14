@@ -13,16 +13,41 @@
 (function () {
   "use strict";
 
-  var Palette = [
-    "#5b8cff", "#8b5cf6", "#34d399", "#fbbf24", "#f87171",
-    "#22d3ee", "#f472b6", "#a3e635", "#fb923c", "#e879f9",
-  ];
+  /* Colours come from the :root tokens, never from literals in this file.
+   * Canvas needs computed values, so the tokens are read at draw time. */
+  var FONT = "Inter, system-ui, sans-serif";
+  var TOKENS = ["--chart-1", "--chart-2", "--chart-3", "--chart-4", "--chart-5"];
 
-  function hexToRgba(hex, a) {
-    var m = /^#?([0-9a-f]{6})$/i.exec(String(hex || ""));
-    if (!m) return "rgba(91,140,255," + a + ")";
-    var n = parseInt(m[1], 16);
-    return "rgba(" + ((n >> 16) & 255) + "," + ((n >> 8) & 255) + "," + (n & 255) + "," + a + ")";
+  function token(name) {
+    try {
+      if (typeof window !== "undefined" && window.getComputedStyle && typeof document !== "undefined") {
+        var v = window.getComputedStyle(document.documentElement).getPropertyValue(name);
+        if (v && v.trim()) return v.trim();
+      }
+    } catch (_) { /* e.g. the Node test shim */ }
+    return "currentColor";
+  }
+
+  function palette() { return TOKENS.map(token); }
+
+  function color(i) {
+    var p = palette();
+    return p[((i % p.length) + p.length) % p.length];
+  }
+
+  var Palette = palette();
+
+  /* Accepts #rrggbb, rgb()/rgba() or any canvas "named" colour. */
+  function hexToRgba(colour, a) {
+    var s = String(colour || "");
+    var m = /^#?([0-9a-f]{6})$/i.exec(s.replace(/^#/, ""));
+    if (m) {
+      var n = parseInt(m[1], 16);
+      return "rgba(" + ((n >> 16) & 255) + "," + ((n >> 8) & 255) + "," + (n & 255) + "," + a + ")";
+    }
+    var r = /^rgb\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)\s*\)$/i.exec(s);
+    if (r) return "rgba(" + r[1] + "," + r[2] + "," + r[3] + "," + a + ")";
+    return s;
   }
 
   function smoothPath(ctx, pts) {
@@ -46,9 +71,11 @@
       host = document.createElement("div");
       host.id = "pc-tooltip-host";
       host.style.cssText =
-        "position:fixed;pointer-events:none;z-index:9999;font-family:Inter,'Segoe UI',system-ui,sans-serif;" +
-        "font-size:12px;line-height:1.5;color:#e8edf7;background:rgba(12,18,34,.95);border:1px solid #22304e;" +
-        "border-radius:10px;padding:9px 12px;box-shadow:0 10px 26px rgba(0,0,0,.45);max-width:280px;" +
+        "position:fixed;pointer-events:none;z-index:9999;" +
+        "font-family:var(--font-body,Inter,system-ui,sans-serif);" +
+        "font-size:12px;line-height:1.5;color:var(--ink);background:var(--card);" +
+        "border:1px solid var(--border);border-radius:12px;padding:9px 12px;" +
+        "box-shadow:var(--shadow);max-width:280px;" +
         "display:none;opacity:0;transition:opacity .08s;white-space:nowrap";
       document.body.appendChild(host);
     }
@@ -62,7 +89,7 @@
     this.series = (this.o.series || []).map(function (s, i) {
       return {
         name: s.name || ("Series " + (i + 1)),
-        color: s.color || Palette[i % Palette.length],
+        color: s.color || color(i),
         type: s.type || "line",
         axis: s.axis || "left",
         smooth: !!s.smooth,
@@ -72,10 +99,10 @@
       };
     });
     this.bands = (this.o.bands || []).map(function (b) {
-      return { name: b.name || "band", color: b.color || "#34d399", lower: b.lower || [], upper: b.upper || [] };
+      return { name: b.name || "band", color: b.color || color(2), lower: b.lower || [], upper: b.upper || [] };
     });
     this.refLines = (this.o.refLines || []).map(function (r) {
-      return { value: r.value, label: r.label || "", color: r.color || "#64748a", dash: r.dash !== false };
+      return { value: r.value, label: r.label || "", color: r.color || token("--muted"), dash: r.dash !== false };
     });
     this.xLabels = this.o.xLabels || [];
     this.yFmt = this.o.yFmt || function (v) { return v == null ? "" : String(Math.round(v)); };
@@ -243,8 +270,8 @@
     };
 
     if (this.title) {
-      ctx.font = "600 12.5px Inter, 'Segoe UI', sans-serif";
-      ctx.fillStyle = "#c8d3ea";
+      ctx.font = "600 12.5px " + FONT;
+      ctx.fillStyle = token("--ink");
       ctx.textAlign = "left"; ctx.textBaseline = "middle";
       ctx.fillText(this.title, this._padL, 12);
     }
@@ -297,7 +324,7 @@
         ctx.fillStyle = hexToRgba(barS.color, 0.85);
         ctx.fill();
         if (this.showValues === "bars") {
-          ctx.fillStyle = "#cdd7f0"; ctx.font = "10.5px Inter, sans-serif";
+          ctx.fillStyle = token("--ink"); ctx.font = "10.5px " + FONT;
           ctx.textAlign = "center"; ctx.textBaseline = by < zeroY ? "bottom" : "top";
           var vlab = this.yFmt(val);
           if (String(vlab).length <= 6) ctx.fillText(vlab, bx + bw / 2, by < zeroY ? by - 3 : by + 12);
@@ -313,7 +340,7 @@
       ctx.strokeStyle = r.color; ctx.globalAlpha = 0.8; ctx.lineWidth = 1.2;
       ctx.beginPath(); ctx.moveTo(this._padL, ry); ctx.lineTo(this._padL + W, ry); ctx.stroke();
       ctx.setLineDash([]); ctx.globalAlpha = 1;
-      ctx.fillStyle = r.color; ctx.font = "600 10.5px Inter, sans-serif";
+      ctx.fillStyle = r.color; ctx.font = "600 10.5px " + FONT;
       ctx.textAlign = "right"; ctx.textBaseline = "bottom";
       ctx.fillText(r.label, this._padL + W, ry - 2);
     }
@@ -394,10 +421,10 @@
     ctx.arc(x, y, 4.5, 0, Math.PI * 2);
     ctx.fillStyle = color;
     ctx.fill();
-    ctx.lineWidth = 2; ctx.strokeStyle = "#0b1020";
+    ctx.lineWidth = 2; ctx.strokeStyle = token("--card");
     ctx.stroke();
     var label = (kind === "max" ? "Highest " : "Lowest ") + this.yFmt(val);
-    ctx.font = "600 10.5px Inter, sans-serif";
+    ctx.font = "600 10.5px " + FONT;
     var tw = ctx.measureText(label).width + 10;
     var lx = x - tw / 2;
     lx = Math.max(this._padL + 2, Math.min(this._padL + W - tw - 2, lx));
@@ -413,7 +440,7 @@
   };
 
   Chart.prototype._drawGrid = function (ctx, v, sc, W, H, yOf) {
-    ctx.font = "10px Inter, sans-serif";
+    ctx.font = "10px " + FONT;
     var niceTicks = function (lo, hi) {
       var span = hi - lo;
       var step = Math.pow(10, Math.floor(Math.log10(span || 1)));
@@ -427,17 +454,17 @@
     var ticks = niceTicks(sc.left.lo, sc.left.hi);
     for (var t = 0; t < ticks.length; t++) {
       var ty = yOf(ticks[t], "left");
-      ctx.strokeStyle = "#22304e"; ctx.globalAlpha = 0.55; ctx.lineWidth = 1;
+      ctx.strokeStyle = token("--border"); ctx.globalAlpha = 0.9; ctx.lineWidth = 1;
       ctx.beginPath(); ctx.moveTo(this._padL, ty); ctx.lineTo(this._padL + W, ty); ctx.stroke();
       ctx.globalAlpha = 1;
-      ctx.fillStyle = "#6b7a99"; ctx.textAlign = "right"; ctx.textBaseline = "middle";
+      ctx.fillStyle = token("--muted"); ctx.textAlign = "right"; ctx.textBaseline = "middle";
       ctx.fillText(this.yFmt(ticks[t]), this._padL - 6, ty);
     }
     if (sc.right) {
       var ticksR = niceTicks(sc.right.lo, sc.right.hi);
       for (var t2 = 0; t2 < ticksR.length; t2++) {
         var ry = yOf(ticksR[t2], "right");
-        ctx.fillStyle = "#6b7a99"; ctx.textAlign = "left"; ctx.textBaseline = "middle";
+        ctx.fillStyle = token("--muted"); ctx.textAlign = "left"; ctx.textBaseline = "middle";
         ctx.fillText(this.yFmtRight(ticksR[t2]), this._padL + W + 6, ry);
       }
     }
@@ -447,7 +474,7 @@
     var step = Math.max(1, Math.ceil(span / 7));
     for (var vi = Math.ceil(v[0] / step) * step; vi <= v[1]; vi += step) {
       var vx = this._xPos(vi, total);
-      ctx.strokeStyle = "#22304e"; ctx.globalAlpha = 0.3; ctx.lineWidth = 1;
+      ctx.strokeStyle = token("--border"); ctx.globalAlpha = 0.5; ctx.lineWidth = 1;
       ctx.beginPath(); ctx.moveTo(vx, this._padT); ctx.lineTo(vx, this._padT + H); ctx.stroke();
       ctx.globalAlpha = 1;
     }
@@ -456,8 +483,8 @@
   Chart.prototype._drawXLabels = function (ctx, v, total) {
     var span = v[1] - v[0] + 1;
     var step = Math.max(1, Math.ceil(span / 6));
-    ctx.font = "10px Inter, sans-serif";
-    ctx.fillStyle = "#6b7a99";
+    ctx.font = "10px " + FONT;
+    ctx.fillStyle = token("--muted");
     ctx.textAlign = "center"; ctx.textBaseline = "top";
     for (var i = Math.ceil(v[0] / step) * step; i <= v[1]; i += step) {
       var lab = this.xLabels[i];
@@ -473,7 +500,7 @@
       items.push({ label: s.name, color: s.color, dash: s.type === "line" });
     });
     if (!items.length) return;
-    ctx.font = "600 10.5px Inter, sans-serif";
+    ctx.font = "600 10.5px " + FONT;
     var x = this._padL;
     var y = this.title ? 28 : 4;
     for (var i = 0; i < items.length; i++) {
@@ -487,7 +514,7 @@
         ctx.fillStyle = it.color;
         ctx.fillRect(x, y + 2, 12, 8);
       }
-      ctx.fillStyle = "#93a0ba"; ctx.textAlign = "left"; ctx.textBaseline = "middle";
+      ctx.fillStyle = token("--muted"); ctx.textAlign = "left"; ctx.textBaseline = "middle";
       ctx.fillText(it.label, x + 16, y + 6);
       x += w;
     }
@@ -511,7 +538,7 @@
     var h = this.hover;
     var x = this._xPos(h.idx, total);
     ctx.setLineDash([3, 3]);
-    ctx.strokeStyle = "rgba(148,163,184,.5)"; ctx.lineWidth = 1;
+    ctx.strokeStyle = token("--muted"); ctx.lineWidth = 1;
     ctx.beginPath(); ctx.moveTo(x, this._padT); ctx.lineTo(x, this._padT + this._plotH()); ctx.stroke();
     ctx.setLineDash([]);
     var self = this;
@@ -520,7 +547,7 @@
       if (val == null || isNaN(val)) return;
       var py = yOf(val, s.axis);
       ctx.beginPath(); ctx.arc(x, py, 3.4, 0, Math.PI * 2);
-      ctx.fillStyle = "#0b1020"; ctx.fill();
+      ctx.fillStyle = token("--card"); ctx.fill();
       ctx.lineWidth = 2; ctx.strokeStyle = s.color; ctx.stroke();
     });
   };
@@ -564,5 +591,6 @@
     });
   };
 
-  window.PricingCharts = { Chart: Chart, Palette: Palette, hexToRgba: hexToRgba };
+  window.PricingCharts = { Chart: Chart, Palette: Palette, palette: palette,
+    color: color, hexToRgba: hexToRgba };
 })();

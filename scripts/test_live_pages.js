@@ -1,10 +1,13 @@
-/* Live smoke test: fetch the deployed dashboard assets from GitHub Pages
- * and boot them against the same DOM/canvas shim used by test_dashboard_boot.
- * Verifies the upload-only experience boots in production: the page starts
- * empty (no built-in demo data) and shows the upload empty states.
+/* Live smoke test: fetch the deployed dashboard assets and boot them against
+ * the same DOM/canvas shim used by test_dashboard_boot.js. Verifies the
+ * dataset-only experience in production: warm-sand tokens are present, no
+ * manual mode remains, and the page starts empty (no built-in demo data).
+ *
+ *   node scripts/test_live_pages.js            (GitHub Pages)
+ *   LIVE_ROOT=http://127.0.0.1:8000/ node scripts/test_live_pages.js
  */
 "use strict";
-const ROOT = "https://harikaran-07.github.io/smart-dynamic-pricing/";
+const ROOT = process.env.LIVE_ROOT || "https://harikaran-07.github.io/smart-dynamic-pricing/";
 
 let fails = 0;
 function assert(cond, msg) {
@@ -34,8 +37,7 @@ function makeEl(tag) {
     appendChild(c) { if (c) { c._parent = this; this.children.push(c); } return c; },
     remove() { if (this._parent) { const i = this._parent.children.indexOf(this); if (i >= 0) this._parent.children.splice(i, 1); } },
     add(o) { this.options.push(o); },
-    addEventListener() {},
-    focus() {}, click() {},
+    addEventListener() {}, focus() {}, click() {},
     querySelector() { return makeEl("div"); },
     querySelectorAll() { return []; },
     getContext() { return makeCtx(); },
@@ -52,8 +54,12 @@ const els = {};
 const doc = {
   head: { appendChild() {} },
   body: makeEl("body"),
+  documentElement: makeEl("html"),
   getElementById(id) { if (!els[id]) els[id] = makeEl("div"); return els[id]; },
-  createElement(tag) { return makeEl(tag); },
+  createElement(tag) {
+    if (tag === "template") return { content: { firstChild: makeEl("div") } };
+    return makeEl(tag);
+  },
   addEventListener() {},
 };
 globalThis.Option = function (text, value) { this.text = text; this.value = value; };
@@ -62,8 +68,7 @@ globalThis.Blob = function () {};
 globalThis.FileReader = function () {};
 const win = globalThis;
 
-/* NOTE: globalThis.URL stays intact while downloading (Node's fetch needs
- * the real URL class); the blob-URL shim is installed right before eval. */
+/* keep the real URL class for fetch, install a blob shim only for eval */
 let URLShim = null;
 function installURLShim() {
   if (URLShim) return;
@@ -72,6 +77,20 @@ function installURLShim() {
 }
 
 async function main() {
+  let html = "";
+  try {
+    const r = await fetch(ROOT);
+    html = await r.text();
+    assert(r.ok, "dashboard index fetched (" + r.status + ")");
+  } catch (e) {
+    console.error("index download failed: " + e.message);
+    process.exit(1);
+  }
+  assert(/--bg:#F6EFE6/i.test(html), "warm sand background token is deployed");
+  assert(/Fraunces/.test(html) && /fonts\.googleapis\.com/.test(html), "Fraunces font linked");
+  assert(/Upload &amp; Analytics/.test(html) && /Portfolio/.test(html), "nav pages present");
+  assert(!/Manual Mode/.test(html), "no Manual Mode switcher");
+
   const files = ["charts.js", "engine.js", "analytics.js", "predict.js", "upload.js", "ml.js"];
   let ok = true;
   for (const f of files) {
@@ -79,24 +98,30 @@ async function main() {
       const r = await fetch(ROOT + f);
       if (!r.ok) { console.error("download failed: " + f + " " + r.status); ok = false; continue; }
       const src = await r.text();
+      assert(!/manualPredict|predictionTable|confidence_pct|q_values:\s*\[/.test(src),
+        f + " carries no browser pricing / fake Q-values");
       new Function("window", "document", "Option", src)(win, doc, globalThis.Option);
       console.log("  ✓ loaded " + f + " (" + (src.length / 1024).toFixed(1) + " KB)");
     } catch (e) { console.error("download failed: " + f + " " + e.message); ok = false; }
   }
-  if (!ok) { console.error("ABORT: assets missing from Pages"); process.exit(1); }
+  if (!ok) { console.error("ABORT: assets missing"); process.exit(1); }
+
   installURLShim();
-  assert(win.PricingData.analytics() === null, "no built-in demo data on live Pages (starts empty)");
-  assert(win.PricingData.source() === "", "engine defaults to empty on live Pages");
-  assert(!!win.PricingML, "PricingML present on live Pages");
+  assert(win.PricingData.analytics() === null, "no built-in demo data on live pages (starts empty)");
+  assert(win.PricingData.source() === "", "engine defaults to empty on live pages");
+  assert(!!win.PricingML, "PricingML present");
   win.PricingML.render();
-  assert(doc.getElementById("ml-steps").innerHTML === "", "stepper empty until upload on live Pages");
-  assert(doc.getElementById("ml-root").innerHTML.indexOf("Upload a CSV dataset") >= 0, "ML upload empty state rendered on live Pages");
-  win.PricingML.renderPrice();
-  assert(doc.getElementById("ml-price-root").innerHTML.indexOf("Upload a dataset") >= 0, "ML price empty state rendered on live Pages");
+  assert(doc.getElementById("ml-steps").innerHTML === "", "stepper empty until upload");
+  assert(doc.getElementById("ml-root").innerHTML.indexOf("Upload a CSV dataset") >= 0,
+    "ML upload empty state rendered");
   const rep = win.PricingData.report();
   assert(rep.size === 0, "empty report before upload (size " + rep.size + ")");
-  const tab = win.PricingData.predictionTable();
-  assert(tab.length === 0, "empty prediction table before upload");
+
+  try { win.PricingPredict.mount(); } catch (e) { console.error(e); fails++; }
+  assert(win.PricingPredict.getMode() === "dataset", "Predict is dataset-only");
+  assert(typeof win.PricingPredict.setMode === "undefined", "no manual-mode switch");
+  assert(els["pp-content"].innerHTML.indexOf("No dataset loaded") >= 0, "Predict empty state rendered");
+
   win.PricingData.setCurrency("GBP", 0.79);
   assert(win.PricingData.getCurrency().symbol === "£", "GBP currency works live");
   win.PricingData.setCurrency("USD");

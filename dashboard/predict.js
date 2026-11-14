@@ -1,104 +1,125 @@
-/* predict.js — Prediction Center for the Smart Dynamic Pricing dashboard.
+/* predict.js — Prediction Center (dataset mode only).
  *
- * Provides two clean modes:
- *   Dataset Mode  : upload/use a dataset, analyse it, train the model, view a
- *                   clear prediction table and download it as CSV.
- *   Manual Mode   : enter price / demand / sales / inventory / competitor /
- *                   quantity / season manually and get KPI cards with a
- *                   recommended price, explanation and dynamic reasoning.
+ * Everything shown here comes from the backend:
+ *   POST /api/pricing/portfolio  -> one row per product (current price, recommended
+ *                                   price, change %, elasticity, R², reliability,
+ *                                   expected demand / revenue / profit)
+ *   POST /api/pricing/recommend  -> the selected product's candidate curve, rules,
+ *                                   warnings and sensitivity table
  *
- * Also renders the 5-step workflow indicator and honours the active currency
- * (USD / INR) via PricingData.setCurrency / fmtMoney.
+ * There is no in-browser price model and no fallback: if the backend cannot be
+ * reached the page says so and offers a Retry button.
  *
- * Exposes window.PricingPredict = { mount(), render() }.
+ * Exposes window.PricingPredict = { mount(), render(), getMode() }.
  */
 (function (root) {
   "use strict";
 
   var P = null; // PricingData
   var C = null; // PricingCharts
-  var state = { mode: "dataset", product: null, manual: null, charts: [] };
+  var state = {
+    objective: "profit",
+    portfolio: null,
+    detail: null,
+    selected: null,
+    loading: false,
+    error: null,
+    charts: [],
+    token: 0,
+  };
 
   function css() {
     var s = document.createElement("style");
     s.textContent = `
-    .pp-panel{background:linear-gradient(180deg,var(--card),var(--card-2));
-      border:1px solid var(--line);border-radius:var(--rad);box-shadow:var(--shadow);overflow:hidden}
-    .pp-steps{display:flex;gap:0;padding:16px 18px;border-bottom:1px solid var(--line);
-      background:rgba(8,12,24,.35);flex-wrap:wrap}
-    .pp-step{display:flex;align-items:center;gap:8px;font-size:12px;color:var(--mut);font-weight:600}
-    .pp-step .n{width:22px;height:22px;border-radius:50%;background:#0c1220;border:1px solid var(--line);
-      display:grid;place-items:center;font-size:11px;font-weight:800;color:var(--faint);flex:none}
-    .pp-step.done .n{background:rgba(52,211,153,.16);color:var(--ok);border-color:rgba(52,211,153,.4)}
-    .pp-step.active{color:var(--txt)}
-    .pp-step.active .n{background:linear-gradient(135deg,var(--acc),var(--acc-2));color:#fff;border:0}
-    .pp-step .a{font-size:11px;color:var(--faint);font-weight:500}
-    .pp-arr{color:var(--line);margin:0 10px;font-size:13px}
-    .pp-modes{display:flex;gap:6px;padding:14px 18px;border-bottom:1px solid var(--line);flex-wrap:wrap}
-    /* .pp-mode → .mode-btn (shared with analytics.js) */
-    .pp-body{padding:18px}
-    .pp-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(330px,1fr));gap:16px}
-    .pp-card{background:linear-gradient(180deg,var(--card),var(--card-2));border:1px solid var(--line);
-      border-radius:var(--rad);padding:18px}
-    .pp-card.wide{grid-column:1/-1}
-    .pp-card h3,.pp-card h4{margin:0 0 4px;font-size:14px;font-weight:700}
-    .pp-card .sub{font-size:12px;color:var(--faint);margin:0 0 12px}
-    .pp-kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px;margin:12px 0}
-    .pp-kpi{background:#0c1220;border:1px solid var(--line);border-radius:12px;padding:13px 14px;position:relative;overflow:hidden}
-    .pp-kpi::before{content:"";position:absolute;inset:0 0 auto 0;height:3px;background:linear-gradient(90deg,var(--acc),var(--acc-2))}
-    .pp-kpi .k{font-size:11px;color:var(--faint);text-transform:uppercase;letter-spacing:.5px}
-    .pp-kpi .v{font-size:20px;font-weight:800;margin-top:5px}
-    .pp-kpi .v.ok{color:var(--ok)} .pp-kpi .v.bad{color:var(--bad)} .pp-kpi .v.warn{color:var(--warn)}
-    .pp-kpi .s{font-size:11px;color:var(--faint);margin-top:3px}
-    .pp-table{width:100%;border-collapse:collapse;font-size:13px;margin-top:8px}
-    .pp-table th,.pp-table td{border:1px solid var(--line);padding:7px 9px;text-align:left;white-space:nowrap}
-    .pp-table th{background:#0c1220;color:var(--acc);font-size:11px;text-transform:uppercase;letter-spacing:.4px}
-    .pp-table td{color:var(--mut)} .pp-table td b{color:var(--txt)}
-    .pp-table .up{color:var(--ok)} .pp-table .down{color:var(--bad)}
-    .pp-scroll{overflow:auto;max-height:340px}
-    .pp-chart{height:250px;margin-top:6px}
+    .pp-panel{display:flex;flex-direction:column;gap:20px}
+    .pp-panel > *{min-width:0}
+    .pp-card{min-width:0;max-width:100%}
+    .pp-steps{display:flex;gap:0;flex-wrap:wrap;background:var(--card);border:1px solid var(--border);
+      border-radius:var(--radius);padding:16px 18px;box-shadow:var(--shadow)}
+    .pp-step{display:flex;align-items:center;gap:9px;font-size:13px;color:var(--muted);font-weight:500}
+    .pp-step .n{width:24px;height:24px;border-radius:50%;background:var(--bg);border:1px solid var(--border);
+      display:grid;place-items:center;font-size:12px;font-weight:600;color:var(--muted);flex:none;
+      font-family:var(--font-head)}
+    .pp-step.done .n{background:var(--ok-bg);color:var(--ok-fg);border-color:var(--ok-bg)}
+    .pp-step.active{color:var(--ink);font-weight:600}
+    .pp-step.active .n{background:var(--accent);color:var(--on-accent);border-color:var(--accent)}
+    .pp-arr{color:var(--border);margin:0 12px;font-size:14px}
+    .pp-card{background:var(--card);border:1px solid var(--border);border-radius:var(--radius);
+      padding:22px 24px;box-shadow:var(--shadow)}
+    .pp-card + .pp-card{margin-top:0}
+    .pp-card h3{margin:0 0 4px;font-size:17px;font-weight:600}
+    .pp-card .sub{font-size:13px;color:var(--muted);margin:0 0 14px}
+    .pp-kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:14px;margin:14px 0}
+    .pp-kpi{background:var(--bg);border:1px solid var(--border);border-radius:12px;padding:12px 14px}
+    .pp-kpi .k{font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px}
+    .pp-kpi .v{font-family:var(--font-head);font-size:24px;font-weight:600;margin-top:4px}
+    .pp-kpi .v.ok{color:var(--ok-fg)} .pp-kpi .v.bad{color:var(--bad-fg)}
+    .pp-kpi .s{font-size:12px;color:var(--faint);margin-top:3px}
+    .pp-chip{display:inline-flex;align-items:center;gap:6px;font-size:12px;padding:5px 11px;
+      border-radius:999px;border:1px solid var(--border);background:var(--bg);color:var(--muted)}
+    .pp-chip b{color:var(--ink);font-weight:600}
+    .pp-chips{display:flex;flex-wrap:wrap;gap:8px;margin:10px 0 2px}
+    .pp-scroll{overflow:auto;border:1px solid var(--border);border-radius:12px;max-height:420px}
+    .pp-table{width:100%;min-width:640px;border-collapse:collapse;font-size:13.5px}
+    .pp-table th{position:sticky;top:0;background:var(--card);color:var(--muted);font-size:12px;
+      font-weight:600;text-transform:uppercase;letter-spacing:.5px;text-align:left;padding:11px 14px;
+      border-bottom:1px solid var(--border);white-space:nowrap}
+    .pp-table td{padding:11px 14px;border-bottom:1px solid var(--border);white-space:nowrap}
+    .pp-table tbody tr:last-child td{border-bottom:0}
+    .pp-table tbody tr{cursor:pointer}
+    .pp-table tbody tr:hover td{background:var(--bg)}
+    .pp-table tbody tr.sel td{background:var(--bg);box-shadow:inset 3px 0 0 var(--accent)}
+    .pp-table .up{color:var(--ok-fg)} .pp-table .down{color:var(--bad-fg)}
+    .pp-chart{height:260px;margin-top:8px}
     .pp-chart canvas{height:100%;width:100%}
-    .pp-reasons{margin-top:14px;display:grid;gap:8px}
-    .pp-reason{display:flex;gap:10px;align-items:flex-start;padding:10px 12px;border-radius:10px;
-      background:rgba(91,140,255,.06);border:1px solid rgba(91,140,255,.16);font-size:13px;color:var(--mut);line-height:1.5}
-    .pp-reason .ic{flex:none;width:24px;height:24px;border-radius:8px;display:grid;place-items:center;
-      font-weight:800;font-size:13px}
-    .pp-reason.up .ic{background:rgba(52,211,153,.16);color:var(--ok)}
-    .pp-reason.down .ic{background:rgba(248,113,113,.16);color:var(--bad)}
-    .pp-reason.flat .ic{background:rgba(148,163,184,.14);color:var(--mut)}
-    .pp-reason b{color:var(--txt)}
-    .pp-reason.up{border-color:rgba(52,211,153,.25)}
-    .pp-reason.down{border-color:rgba(248,113,113,.25)}
-    .pp-expl{margin-top:14px;padding:12px 14px;border-radius:10px;background:rgba(91,140,255,.07);
-      border:1px solid rgba(91,140,255,.2);font-size:13px;line-height:1.65;color:var(--mut)}
-    .pp-expl b{color:var(--txt)}
-    .pp-err{margin-top:12px;padding:12px;border-radius:10px;background:rgba(248,113,113,.1);
-      border:1px solid rgba(248,113,113,.3);color:var(--bad);font-size:13px}
-    .pp-meta{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:12px}
-    .pp-chip{font-size:12px;padding:6px 11px;border-radius:999px;border:1px solid var(--line);
-      background:#0c1220;color:var(--mut);font-weight:600}
-    .pp-chip b{color:var(--txt)}
-    .pp-chip.warn{color:var(--warn);border-color:rgba(251,191,36,.35)}
-    .pp-empty{padding:26px;text-align:center;color:var(--faint);font-size:13px;border:1px dashed var(--line);
-      border-radius:12px;margin-top:8px}
-    /* .pp-btn → base button, .pp-btn.ghost → btn-secondary */
-    .pp-actions{display:flex;gap:10px;flex-wrap:wrap;margin-top:14px}
-    .pp-form{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:12px}
-    .pp-form label{font-size:12px;margin:0 0 5px;color:var(--mut);font-weight:600}
-    .pp-form input,.pp-form select{width:100%}
-    @media (max-width:560px){.pp-step .a{display:none}.pp-arr{margin:0 6px}}
+    .pp-reasons{display:grid;gap:8px;margin-top:14px}
+    .pp-reason{display:flex;gap:10px;align-items:flex-start;padding:11px 13px;border-radius:12px;
+      background:var(--bg);border:1px solid var(--border);font-size:13.5px;color:var(--ink);line-height:1.55}
+    .pp-reason .ic{flex:none;width:22px;height:22px;border-radius:50%;display:grid;place-items:center;
+      font-weight:700;font-size:12px;background:var(--card);border:1px solid var(--border)}
+    .pp-reason.up .ic{background:var(--ok-bg);color:var(--ok-fg);border-color:var(--ok-bg)}
+    .pp-reason.down .ic{background:var(--bad-bg);color:var(--bad-fg);border-color:var(--bad-bg)}
+    .pp-actions{display:flex;gap:10px;flex-wrap:wrap;margin-top:16px}
+    .pp-actions button{width:auto}
+    .pp-form{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px;align-items:end}
+    .pp-form label{margin:0 0 6px}
+    .pp-section-head{display:flex;flex-wrap:wrap;gap:12px;align-items:center;justify-content:space-between;
+      margin:0 0 14px}
+    .pp-section-head h3{margin:0;font-size:17px;font-weight:600}
+    .pp-empty{padding:30px 20px;text-align:center;color:var(--muted);font-size:13.5px;
+      border:1px dashed var(--border);border-radius:var(--radius);background:var(--card)}
+    .pp-empty button{width:auto;margin:14px auto 0}
+    .pp-toggle{display:inline-flex;gap:4px;padding:4px;border:1px solid var(--border);border-radius:999px;
+      background:var(--bg)}
+    .pp-toggle button{min-height:38px;padding:0 16px;border-radius:999px;background:transparent;
+      color:var(--muted);font-family:var(--font-body);font-weight:600;font-size:13px}
+    .pp-toggle button:hover{background:var(--card);color:var(--ink)}
+    .pp-toggle button.active{background:var(--accent);color:var(--on-accent)}
+    @media (max-width:560px){
+      .pp-step .lbl{display:none} .pp-arr{margin:0 6px}
+      .pp-actions button{width:100%}
+      .pp-card,.pp-panel .pp-card{padding:18px}
+    }
+    @media (prefers-reduced-motion:reduce){ *{transition:none !important} }
     `;
     document.head.appendChild(s);
   }
 
-  function fmt(n, d) {
-    if (n == null || isNaN(n)) return "—";
-    return Number(n).toLocaleString("en-IN", { maximumFractionDigits: d == null ? 0 : d });
-  }
   function esc(s) {
-    return String(s).replace(/[&<>"']/g, function (c) {
+    return String(s == null ? "" : s).replace(/[&<>"']/g, function (c) {
       return ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]);
     });
+  }
+  function n(v, d) {
+    if (v == null || isNaN(v)) return "—";
+    return Number(v).toLocaleString(undefined, { maximumFractionDigits: d == null ? 0 : d });
+  }
+  function money(v, d) {
+    return P ? P.fmtMoney(v, d == null ? 2 : d) : "$" + n(v, d);
+  }
+  function pct(v, d) {
+    if (v == null || isNaN(v)) return "—";
+    return (v > 0 ? "+" : "") + Number(v).toFixed(d == null ? 1 : d) + "%";
   }
   function el(html) {
     var t = document.createElement("template");
@@ -109,275 +130,435 @@
     state.charts.forEach(function (c) { try { c.destroy(); } catch (_) {} });
     state.charts = [];
   }
+  function reliabilityPill(level) {
+    var key = String(level || "").toLowerCase();
+    var cls = key === "high" ? "rel-high" : key === "medium" ? "rel-medium" : "rel-low";
+    return '<span class="rel ' + cls + '">' + esc(level || "—") + "</span>";
+  }
+  function chartColor(i) {
+    if (C && C.color) return C.color(i);
+    return "currentColor";
+  }
 
-  /* ------------------- step indicator ------------------- */
+  /* ------------------------- steps ------------------------- */
   function steps(active) {
-    var list = [
-      ["Select Mode"], ["Enter/Upload Data"], ["Analyze"], ["Predict"], ["View Results"],
-    ];
-    return '<div class="pp-steps">' + list.map(function (st, i) {
+    var list = ["Upload", "Profile", "Train", "Price", "Results"];
+    return '<div class="pp-steps">' + list.map(function (label, i) {
       var cls = i < active ? "done" : i === active ? "active" : "";
-      return '<div class="pp-step ' + cls + '"><span class="n">' + (i + 1) + '</span><span class="a">' + st[0] + '</span></div>' +
-        (i < list.length - 1 ? '<span class="pp-arr">→</span>' : "");
-    }).join("") + '</div>';
+      return '<div class="pp-step ' + cls + '"><span class="n">' + (i + 1) +
+        '</span><span class="lbl">' + label + "</span></div>" +
+        (i < list.length - 1 ? '<span class="pp-arr" aria-hidden="true">→</span>' : "");
+    }).join("") + "</div>";
+  }
+  function currentStep() {
+    var bk = root.PricingBackend;
+    if (!bk || !bk.profile) return 1;
+    if (!bk.train) return 2;
+    return 4;
   }
 
-  /* ------------------- dataset mode ------------------- */
-  function renderDataset() {
-    var wrap = el('<div class="pp-grid"></div>');
-    var a = P.analytics();
-    if (!a) {
-      var empty = el('<div class="pp-card wide"><h4>No dataset loaded</h4>' +
-        '<p class="sub">Upload a CSV or Excel file with the <b>Upload Dataset</b> button to train the model, run predictions and export results.</p></div>');
-      wrap.appendChild(empty);
-      return wrap;
-    }
-    var report = P.report();
-    var meta = P.meta();
-    var currency = P.getCurrency();
-
-    /* dataset analytics card */
-    var chips =
-      '<div class="pp-meta">' +
-      ppchip("Dataset", (meta && meta.fileName) || "—", "") +
-      ppchip("Size", fmt(a.records) + " rows", "") +
-      ppchip("Features", a.features, "") +
-      ppchip("Products", a.products, "") +
-      ppchip("Missing values", fmt(report.missingValues), report.missingValues ? "warn" : "") +
-      ppchip("Duplicate records", fmt(report.duplicates), report.duplicates ? "warn" : "") +
-      '</div>';
-
-    var statsGrid = '<div class="pp-kpis">' +
-      statKpi("Price (min)", P.fmtMoney(report.stats.price.min), "avg " + P.fmtMoney(report.stats.price.avg)) +
-      statKpi("Price (max)", P.fmtMoney(report.stats.price.max), "median avg shown") +
-      statKpi("Units/day (avg)", fmt(report.stats.units_sold.avg, 1), "min " + fmt(report.stats.units_sold.min) + " · max " + fmt(report.stats.units_sold.max)) +
-      statKpi("Inventory (avg)", fmt(report.stats.inventory.avg, 0), "min " + fmt(report.stats.inventory.min) + " · max " + fmt(report.stats.inventory.max)) +
-      '</div>';
-
-    var previewRows = report.preview.map(function (r) {
-      return '<tr><td><b>' + esc(r.product_id) + '</b></td><td>' + esc(r.date) + '</td><td>' + P.fmtMoney(r.price) +
-        '</td><td>' + P.fmtMoney(r.cost) + '</td><td>' + P.fmtMoney(r.competitor_price) + '</td><td>' + fmt(r.inventory) +
-        '</td><td>' + fmt(r.units_sold) + '</td></tr>';
-    }).join("");
-    var preview = '<div class="pp-scroll"><table class="pp-table"><thead><tr>' +
-      ['Product', 'Date', 'Price', 'Cost', 'Competitor', 'Stock', 'Units'].map(function (h) { return '<th>' + h + '</th>'; }).join("") +
-      '</tr></thead><tbody>' + (previewRows || '<tr><td colspan="7" style="text-align:center;color:var(--faint)">No rows</td></tr>') + '</tbody></table></div>';
-
-    var dsCard = el('<div class="pp-card wide"><h3>Dataset Analytics</h3>' +
-      '<p class="sub">Size, quality, basic statistics and a preview of the active dataset. Missing values are filled with the column median and duplicate rows are reported.</p>' +
-      chips + statsGrid + preview +
-      (report.missingValues ? '<div class="pp-expl"><b>Heads-up:</b> ' + report.missingValues + ' missing value(s) were detected and safely filled using the median of each column.</div>' : "") +
-      '</div>');
-    wrap.appendChild(dsCard);
-
-    /* ML model card */
-    var m = a.model;      var tourHtml = "";
-    if (m.tournament && m.tournament.length) {
-      tourHtml = '<div style="margin-top:14px;"><h4 style="margin:0 0 6px;font-size:13px;color:var(--txt)">Model Tournament Results</h4>' +
-        '<div class="pp-scroll"><table class="pp-table"><thead><tr><th>Model</th><th>Hold-out R²</th><th>MAE</th><th>RMSE</th><th>Status</th></tr></thead><tbody>' +
-        m.tournament.map(function (tm) {
-          var isBest = tm.isBest;
-          return '<tr' + (isBest ? ' style="background:rgba(91,140,255,0.12);font-weight:700"' : '') + '><td><b>' + esc(tm.name) + '</b></td><td>' +
-            fmt(tm.r2, 3) + '</td><td>' + fmt(tm.mae, 2) + '</td><td>' + fmt(tm.rmse, 2) + '</td><td>' +
-            (isBest ? '<span class="pp-chip" style="color:var(--ok);border-color:rgba(52,211,153,.35);padding:2px 8px;font-size:11px">BEST</span>' : '<span style="color:var(--faint);font-size:12px">Evaluated</span>') + '</td></tr>';
-        }).join("") + '</tbody></table></div></div>';
-    }
-
-    var modelCard = el('<div class="pp-card wide"><h3>ML Model Intelligence</h3><p class="sub">Trained with a strict 80/20 train/test split, economic elasticity estimation, and multi-model tournament.</p>' +
-      '<div class="pp-kpis">' +
-      statKpi("Champion Model", esc(m.championName || m.name), "winning backbone") +
-      statKpi("Price Elasticity (ε)", (m.elasticity != null ? fmt(m.elasticity, 2) : "—"), "demand responsiveness") +
-      statKpi("R² score", m.r2, "variance explained on test set") +
-      statKpi("MAE", fmt(m.mae, 2) + " units", "mean absolute error") +
-      statKpi("RMSE", fmt(m.rmse, 2) + " units", "root mean squared error") +
-      statKpi("Train / test rows", fmt(m.trainSize) + " / " + fmt(m.testSize), "80 / 20 split") +
-      statKpi("Training time", fmt(m.trainingTimeMs) + " ms", "multi-model tournament") +
-      statKpi("Features", fmt(m.features.length), m.features.join(", ")) +
-      '</div>' + tourHtml + '</div>');
-    wrap.appendChild(modelCard);
-
-    /* prediction table */
-    var rows = P.predictionTable();
-    var tableHtml = rows.map(function (r) {
-      var up = r.price_change_pct > 0, down = r.price_change_pct < 0;
-      return '<tr><td><b>' + esc(r.product_id) + '</b></td><td>' + esc(r.category) + '</td><td>' + P.fmtMoney(r.base_price) +
-        '</td><td><b>' + P.fmtMoney(r.recommended_price) + '</b></td>' +
-        '<td class="' + (up ? "up" : down ? "down" : "") + '">' + (up ? "+" : "") + r.price_change_pct + '%</td>' +
-        '<td>' + P.fmtMoney(r.expected_revenue, 0) + '</td></tr>';
-    }).join("");
-    var predCard = el('<div class="pp-card wide"><h4>Prediction Results</h4>' +
-      '<p class="sub">Recommended price per product from the trained pricing model. Use the currency selector to switch between USD ($) and INR (₹).</p>' +
-      '<div class="pp-scroll"><table class="pp-table"><thead><tr>' +
-      ['Product', 'Category', 'Base price', 'Recommended', 'Change', 'Expected revenue'].map(function (h) { return '<th>' + h + '</th>'; }).join("") +
-      '</tr></thead><tbody>' + tableHtml + '</tbody></table></div>' +
-      '<div class="pp-actions"><button id="pp-export">Download Predictions (CSV)</button>' +
-      '<button class="btn-secondary" id="pp-refresh">Retrain Model</button></div></div>');
-    wrap.appendChild(predCard);
-
-    /* actual vs recommended chart */
-    var chartCard = el('<div class="pp-card wide"><h4>Actual Price vs Recommended Price</h4>' +
-      '<p class="sub">Current base price versus the model recommendation — highest and lowest are marked automatically.</p>' +
-      '<div class="pp-chart"><canvas></canvas></div></div>');
-    wrap.appendChild(chartCard);
-    if (C) {
-      var ch = new C.Chart(chartCard.querySelector("canvas"), {
-        xLabels: rows.map(function (r) { return r.product_id; }),
-        series: [
-          { name: "Actual price", color: "#5b8cff", type: "bar", data: rows.map(function (r) { return r.base_price; }) },
-          { name: "Recommended", color: "#34d399", type: "bar", data: rows.map(function (r) { return r.recommended_price; }) },
-        ],
-        yFmt: function (v) { return P.fmtMoney(v, 0); },
-        showValues: "bars",
-      });
-      state.charts.push(ch);
-    }
-
-    wrap.querySelector("#pp-export").onclick = function () {
-      var e = P.exportPredictions();
-      P.download(e.name, e.csv);
-      root.PricingUI && root.PricingUI.toast("Export ready", e.name + " downloaded.", "ok");
-    };
-    wrap.querySelector("#pp-refresh").onclick = function () {
-      var t0 = performance.now();
-      P.refreshModel();
-      state.product = a.productList[0] ? a.productList[0].product_id : state.product;
-      render();
-      root.PricingUI && root.PricingUI.toast("Model retrained", "Recomputed in " + Math.round(performance.now() - t0) + " ms.", "ok");
-    };
-
-    return wrap;
+  /* ------------------------- data access ------------------------- */
+  function api() { return root.PricingApi && root.PricingApi.api; }
+  function datasetId() {
+    var bk = root.PricingBackend;
+    return bk && bk.datasetId ? bk.datasetId : null;
   }
 
-  function ppchip(label, value, tone) {
-    return '<span class="pp-chip ' + (tone || "") + '">' + label + ': <b>' + value + '</b></span>';
-  }
-  function statKpi(k, v, s) {
-    return '<div class="pp-kpi"><div class="k">' + k + '</div><div class="v">' + v + '</div>' +
-      (s ? '<div class="s">' + s + '</div>' : "") + '</div>';
-  }
-
-  /* ------------------- manual mode ------------------- */
-  function manualForm() {
-    var months = P.MONTH_NAMES.map(function (m, i) { return '<option value="' + (i + 1) + '">' + m + '</option>'; }).join("");
-    return '<div class="pp-form">' +
-      '<div><label>Current price</label><input id="pp-m-price" type="number" step="0.01" value="49.99" min="0"/></div>' +
-      '<div><label>Sales (units)</label><input id="pp-m-sales" type="number" value="20" min="0"/></div>' +
-      '<div><label>Inventory / stock</label><input id="pp-m-inv" type="number" value="50" min="0"/></div>' +
-      '<div><label>Competitor price</label><input id="pp-m-comp" type="number" step="0.01" value="52.00" min="0"/></div>' +
-      '<div><label>Quantity (order size)</label><input id="pp-m-qty" type="number" value="1" min="1"/></div>' +
-      '<div><label>Cost (optional)</label><input id="pp-m-cost" type="number" step="0.01" placeholder="auto = 50% of price"/></div>' +
-      '<div><label>Season</label><select id="pp-m-season">' +
-      '<option value="normal">Normal</option><option value="festival" selected>Festival</option>' +
-      '<option value="summer">Summer</option><option value="winter">Winter</option><option value="monsoon">Monsoon</option></select></div>' +
-      '<div><label>Month</label><select id="pp-m-month">' + months + '</select></div>' +
-      '<div><label>Day type</label><select id="pp-m-day"><option value="0">Weekday</option><option value="1">Weekend</option></select></div>' +
-      '</div>';
+  function loadPortfolio() {
+    var call = api();
+    var id = datasetId();
+    if (!call || !id) return Promise.reject(new Error(
+      "The dataset has not been sent to the backend yet."));
+    return call("/api/pricing/portfolio", {
+      dataset_id: id,
+      objective: state.objective,
+      top: 50,
+    });
   }
 
-  function readManual() {
+  /* The row is only *data entry* for the backend: the browser never prices it. */
+  function productRow(pid) {
+    var rows = P && P.rows();
+    if (!rows || !rows.length) return null;
+    var matches = rows.filter(function (r) { return r.product_id === pid; });
+    if (!matches.length) matches = rows;
+    var r = matches[matches.length - 1];
     return {
-      price: +document.getElementById("pp-m-price").value || 0,
-      inventory: +document.getElementById("pp-m-inv").value,
-      competitor: +document.getElementById("pp-m-comp").value,
-      cost: document.getElementById("pp-m-cost").value ? +document.getElementById("pp-m-cost").value : undefined,
-      month: +document.getElementById("pp-m-month").value,
-      weekend: +document.getElementById("pp-m-day").value,
-      season: document.getElementById("pp-m-season").value,
-      quantity: +document.getElementById("pp-m-qty").value || 1,
+      product_id: r.product_id,
+      price: r.price,
+      cost: r.cost,
+      competitor_price: r.competitor_price,
+      inventory: r.inventory,
+      units_sold: r.units_sold,
+      discount_pct: r.discount,
+      date: P.dateKey ? P.dateKey(r) : null,
     };
   }
 
-  function renderManualResult(res, elHost) {
-    var o = res.optimal, c = res.current;
-    var delta = o.price_delta_pct;
-    var up = delta > 0.01, down = delta < -0.01;
-    var dirCls = up ? "ok" : down ? "bad" : "";
-    var arrow = up ? "▲" : down ? "▼" : "—";
-    var confidence = res.confidence_pct;
+  function loadDetail(pid) {
+    var call = api();
+    var id = datasetId();
+    if (!call || !id) return Promise.reject(new Error("No backend dataset."));
+    var row = productRow(pid);
+    if (!row) return Promise.reject(new Error("No rows available for this product."));
+    return call("/api/pricing/recommend", {
+      dataset_id: id,
+      objective: state.objective,
+      row: row,
+    });
+  }
 
-    var kpis =
-      '<div class="pp-kpis">' +
-      '<div class="pp-kpi"><div class="k">Recommended price</div><div class="v ok">' + P.fmtMoney(o.recommended_price) + '</div>' +
-      '<div class="s">cost floor ' + P.fmtMoney(res.input.cost != null ? res.input.cost : o.recommended_price * 0.5) + '</div></div>' +
-      '<div class="pp-kpi"><div class="k">Expected revenue</div><div class="v">' + P.fmtMoney(o.revenue, 0) + '</div>' +
-      '<div class="s">' + P.fmtMoney(c.revenue, 0) + ' today</div></div>' +
-      '<div class="pp-kpi"><div class="k">Expected profit</div><div class="v">' + P.fmtMoney(o.profit, 0) + '</div>' +
-      '<div class="s">' + P.fmtMoney(c.profit, 0) + ' today</div></div>' +
-      '<div class="pp-kpi"><div class="k">Price change</div><div class="v ' + dirCls + '">' + arrow + ' ' + (up ? "+" : "") + delta + '%</div>' +
-      '<div class="s">' + P.fmtMoney(c.price) + ' → ' + P.fmtMoney(o.recommended_price) + '</div></div>' +
-      '<div class="pp-kpi"><div class="k">Confidence</div><div class="v">' + confidence + '%</div>' +
-      '<div class="s">model R² ' + (res.model ? res.model.r2 : "—") + '</div></div>' +
-      '</div>';
+  /* ------------------------- report card ------------------------- */
+  function reportCard() {
+    var bk = root.PricingBackend || {};
+    var profile = bk.profile || {};
+    var train = bk.train || {};
+    var best = train.best || null;
+    var quality = profile.quality || null;
+    var chips =
+      '<div class="pp-chips">' +
+      chip("Dataset", esc(bk.fileName || "uploaded")) +
+      chip("Rows", n(profile.rows)) +
+      chip("Target", esc(profile.suggested_target || "—")) +
+      (profile.duplicates != null ? chip("Duplicates removed", n(profile.duplicates)) : "") +
+      (quality ? chip("Data quality", quality.score + "/100 · " + esc(quality.label)) : "") +
+      "</div>";
+
+    var kpis = '<div class="pp-kpis">' +
+      (best
+        ? kpi("Best model", esc(best.name), "lowest hold-out RMSE") +
+          kpi("Random-split R²", n(best.r2, 3), "80/20 hold-out") +
+          kpi("Time-split R²", train.time_split ? n(train.time_split.r2, 3) : "—",
+            "last 20% of dates held out") +
+          kpi("MAE / RMSE", n(best.mae, 2) + " / " + n(best.rmse, 2), "units")
+        : kpi("Model", "not trained", "upload again to retry"))
+      + "</div>";
+
+    return '<div class="pp-card"><h3>Dataset report</h3>' +
+      '<p class="sub">Profiling and model metrics are computed by the backend on your uploaded CSV.</p>' +
+      chips + kpis + "</div>";
+  }
+  function chip(label, value) {
+    return '<span class="pp-chip">' + esc(label) + ": <b>" + value + "</b></span>";
+  }
+  function kpi(k, v, s) {
+    return '<div class="pp-kpi"><div class="k">' + esc(k) + '</div><div class="v">' + v + "</div>" +
+      (s ? '<div class="s">' + esc(s) + "</div>" : "") + "</div>";
+  }
+
+  /* ------------------------- prediction table ------------------------- */
+  function portfolioTable(items) {
+    if (!items || !items.length) {
+      return '<div class="pp-empty">The backend found no product with a usable demand curve. ' +
+        "Check that the CSV has price, units and several rows per product.</div>";
+    }
+    var rows = items.map(function (it, i) {
+      var up = it.change_pct > 0, down = it.change_pct < 0;
+      var sel = state.selected === it.product ? " class=\"sel\"" : "";
+      return "<tr data-product=\"" + esc(it.product) + "\"" + sel + ">" +
+        "<td><b>" + esc(it.product) + "</b></td>" +
+        '<td class="num">' + money(it.current_price) + "</td>" +
+        '<td class="num"><b>' + money(it.recommended_price) + "</b></td>" +
+        '<td class="num ' + (up ? "up" : down ? "down" : "") + '">' +
+          (up ? "▲ " : down ? "▼ " : "") + pct(it.change_pct) + "</td>" +
+        '<td class="num">' + n(it.elasticity, 2) + "</td>" +
+        '<td class="num">' + n(it.expected_demand, 1) + "</td>" +
+        '<td class="num">' + money(it.expected_revenue, 0) + "</td>" +
+        '<td class="num">' + (it.expected_profit != null ? money(it.expected_profit, 0) : "—") + "</td>" +
+        "<td>" + reliabilityPill(it.reliability) + "</td></tr>";
+    }).join("");
+    return '<div class="pp-section-head"><h3>Recommendations</h3>' +
+      '<span class="pp-chip">' + items.length + " products · objective: " +
+      esc(state.objective) + "</span></div>" +
+      '<div class="pp-scroll"><table class="pp-table"><thead><tr>' +
+      ["Product", "Current", "Recommended", "Change", "Elasticity", "Demand/day",
+        "Revenue/day", "Profit/day", "Reliability"].map(function (h, i) {
+        return '<th' + (i > 0 ? ' class="num"' : "") + ">" + h + "</th>";
+      }).join("") + "</tr></thead><tbody>" + rows + "</tbody></table></div>" +
+      '<p style="font-size:12.5px;color:var(--muted);margin:10px 0 0">' +
+      "Current price is the median of the last 14 days. Reliability is Low when R² &lt; 0.10, " +
+      "the elasticity confidence interval includes zero, or there are fewer than 30 rows.</p>";
+  }
+
+  function priceChart(items) {
+    if (!C || !items.length) return "";
+    return '<div class="pp-card"><h3>Current vs recommended price</h3>' +
+      '<p class="sub">Backend recommendation per product.</p>' +
+      '<div class="pp-chart" id="pp-price-chart"><canvas></canvas></div></div>';
+  }
+
+  /* the chart must be attached to the live canvas, so it is drawn after the
+   * card HTML is in the DOM (a detached canvas measures 0x0) */
+  function attachPriceChart() {
+    var items = state.portfolio && state.portfolio.items ? state.portfolio.items : [];
+    if (!C || !items.length) return;
+    var holder = document.getElementById("pp-price-chart");
+    if (!holder) return;
+    var canvas = holder.querySelector("canvas");
+    if (!canvas) return;
+    var chart = new C.Chart(canvas, {
+      xLabels: items.map(function (it) { return it.product; }),
+      series: [
+        { name: "Current price", color: chartColor(1), type: "bar",
+          data: items.map(function (it) { return it.current_price; }) },
+        { name: "Recommended", color: chartColor(0), type: "bar",
+          data: items.map(function (it) { return it.recommended_price; }) },
+      ],
+      yFmt: function (v) { return money(v, 0); },
+      showValues: "bars",
+    });
+    state.charts.push(chart);
+  }
+
+  /* ------------------------- detail panel ------------------------- */
+  function detailPanel(res) {
+    if (!res || !res.supports_optimization) {
+      return '<div class="pp-card"><h3>Product detail</h3>' +
+        '<div class="note bad">' + esc(res && res.reason ? res.reason :
+          "No recommendation available for this product.") + "</div></div>";
+    }
+    var opt = res.optimal, cur = res.current, dm = res.demand_model;
+    var up = opt.change_pct > 0, down = opt.change_pct < 0;
+    var hero =
+      '<div class="hero"><div>' +
+      '<div class="label">Recommended price</div>' +
+      '<div class="hero-num">' + money(opt.price) + "</div>" +
+      '<div class="meta">' + (up ? "▲" : down ? "▼" : "—") + " " + pct(opt.change_pct) +
+      " vs " + money(cur.price) + " today · objective: " + esc(opt.objective) + "</div></div>" +
+      '<div class="side">' + reliabilityPill(res.reliability.level) +
+      "<br/>elasticity " + n(dm.elasticity, 2) +
+      (dm.elasticity_ci95 ? " (95% CI " + n(dm.elasticity_ci95[0], 2) + " to " +
+        n(dm.elasticity_ci95[1], 2) + ")" : "") +
+      "<br/>R² " + n(dm.r2, 2) + " · " + n(dm.n_obs) + " rows</div></div>";
+
+    var kpis = '<div class="pp-kpis">' +
+      kpi("Units/day", n(opt.estimated_demand, 1), "today " + n(cur.estimated_demand, 1)) +
+      kpi("Revenue/day", money(opt.estimated_revenue, 0), "today " + money(cur.estimated_revenue, 0)) +
+      (opt.estimated_profit != null
+        ? kpi("Profit/day", money(opt.estimated_profit, 0), "today " + money(cur.estimated_profit, 0))
+        : "") +
+      kpi("Margin", opt.margin_pct != null ? n(opt.margin_pct, 1) + "%" : "—",
+        "at the recommended price") +
+      "</div>";
+
+    var rules = (res.rules && res.rules.length)
+      ? '<div class="pp-reasons">' + res.rules.map(function (r) {
+          return '<div class="pp-reason"><span class="ic">⚖</span><span><b>' +
+            esc(r.rule) + "</b> — " + esc(r.detail) + "</span></div>";
+        }).join("") + "</div>"
+      : '<p class="note" style="margin-top:12px">No business rule clipped this recommendation.</p>';
+
+    var warnings = (res.warnings && res.warnings.length)
+      ? '<div class="pp-reasons">' + res.warnings.map(function (w) {
+          return '<div class="pp-reason down"><span class="ic">!</span><span>' + esc(w) + "</span></div>";
+        }).join("") + "</div>"
+      : "";
 
     var reasons = (res.reasons || []).map(function (r) {
-      return '<div class="pp-reason ' + esc(r.tone) + '"><span class="ic">' + esc(r.icon) + '</span><span>' + esc(r.text) + '</span></div>';
+      return '<div class="pp-reason ' + esc(r.tone || "flat") + '"><span class="ic">' +
+        esc(r.icon || "•") + "</span><span>" + esc(r.text) + "</span></div>";
     }).join("");
 
-    var curRev = Math.round(c.revenue * 100) / 100, curProf = Math.round(c.profit * 100) / 100;
-    var optRev = Math.round(o.revenue * 100) / 100, optProf = Math.round(o.profit * 100) / 100;
-    var revDelta = curRev ? Math.round((optRev - curRev) / curRev * 100) : 0;
-    var profDelta = curProf ? Math.round((optProf - curProf) / curProf * 100) : 0;
+    var sens = res.sensitivity || [];
+    var sensTable = sens.length
+      ? '<div class="pp-scroll" style="max-height:none;margin-top:10px"><table class="pp-table"><thead><tr>' +
+        ["Price change", "Price", "Demand/day", "Revenue/day", "Profit/day", "Profit change"]
+          .map(function (h, i) { return '<th' + (i ? ' class="num"' : "") + ">" + h + "</th>"; }).join("") +
+        "</tr></thead><tbody>" + sens.map(function (s) {
+          return "<tr><td>" + pct(s.price_change_pct) + "</td>" +
+            '<td class="num">' + money(s.price) + "</td>" +
+            '<td class="num">' + n(s.demand, 1) + "</td>" +
+            '<td class="num">' + money(s.revenue, 0) + "</td>" +
+            '<td class="num">' + (s.profit != null ? money(s.profit, 0) : "—") + "</td>" +
+            '<td class="num">' + (s.profit_change_pct != null ? pct(s.profit_change_pct) : "—") + "</td></tr>";
+        }).join("") + "</tbody></table></div>"
+      : "";
 
-    elHost.innerHTML =
-      kpis +
-      '<div class="pp-expl"><b>Why this price?</b> "The recommended price is based on inventory, competitor pricing, and historical sales patterns." At the recommended price, revenue is expected to ' +
-      (revDelta >= 0 ? "rise" : "fall") + ' by ' + Math.abs(revDelta) + '% and profit to ' + (profDelta >= 0 ? "rise" : "fall") + ' by ' +
-      Math.abs(profDelta) + '% versus the current scenario.</div>' +
-      '<div class="pp-card" style="padding:0"><h4 style="padding:16px 18px 0">Pricing Recommendation</h4>' +
-      '<div class="pp-reasons" style="padding:0 18px 18px">' + (reasons || '<p style="color:var(--faint)">No factors to explain yet.</p>') + '</div></div>';
+    return '<div class="pp-card"><h3>Product detail — ' + esc(state.selected) + "</h3>" +
+      '<p class="sub">Candidate prices come from the fitted demand curve; the sensitivity table moves ' +
+      "the recommended price by ±10%.</p>" +
+      hero + kpis +
+      '<h4 style="margin:18px 0 6px;font-size:14px">Applied business rules</h4>' + rules +
+      warnings +
+      '<h4 style="margin:18px 0 6px;font-size:14px">Why this price</h4>' +
+      '<div class="pp-reasons">' + reasons + "</div>" +
+      '<h4 style="margin:18px 0 6px;font-size:14px">Sensitivity</h4>' + sensTable +
+      '<p style="font-size:12.5px;color:var(--muted);margin:12px 0 0">' + esc(res.caveat || "") + "</p>" +
+      '<div class="pp-chart" id="pp-detail-chart"><canvas></canvas></div>' +
+      '<p style="font-size:12.5px;color:var(--muted);margin:6px 0 0">Demand curve over the candidate ' +
+      "grid the optimiser searched (left axis: units/day, right axis: revenue).</p>" +
+      "</div>";
   }
 
-  function renderManual() {
-    var wrap = el('<div class="pp-grid"></div>');
-    var formCard = el('<div class="pp-card"><h4>Manual Input</h4>' +
-      '<p class="sub">Enter product details to get a price recommendation — works independently of any uploaded dataset.</p>' +
-      manualForm() +
-      '<div class="pp-actions"><button id="pp-predict">Predict Price</button></div>' +
-      '<div class="pp-err" id="pp-manual-err" style="display:none"></div></div>');
-    var resultCard = el('<div class="pp-card"><h4>Prediction Dashboard</h4>' +
-      '<p class="sub">KPI results appear here after you press Predict Price.</p>' +
-      '<div id="pp-result"><div class="pp-empty">No prediction yet — fill the form and press Predict Price.</div></div></div>');
-    wrap.appendChild(formCard);
-    wrap.appendChild(resultCard);
-
-    var monthSel = formCard.querySelector("#pp-m-month");
-    monthSel.value = String(new Date().getMonth() + 1);
-
-    formCard.querySelector("#pp-predict").onclick = function () {
-      var m = readManual();
-      var err = formCard.querySelector("#pp-manual-err");
-      if (!(m.price > 0)) {
-        err.textContent = "Please enter a positive current price.";
-        err.style.display = "block";
-        return;
-      }
-      if (!(m.inventory > 0)) {
-        err.textContent = "Inventory must be greater than zero.";
-        err.style.display = "block";
-        return;
-      }
-      err.style.display = "none";
-      state.manual = m;
-      try {
-        var res = P.manualPredict(m);
-        renderManualResult(res, resultCard.querySelector("#pp-result"));
-      } catch (e) {
-        err.textContent = e && e.message ? e.message : String(e);
-        err.style.display = "block";
-      }
-    };
-
-    return wrap;
+  function detailChart(res) {
+    var canvas = document.getElementById("pp-detail-chart");
+    if (!canvas || !C || !res || !res.candidates || !res.candidates.length) return;
+    var cand = res.candidates;
+    // downsample to keep the chart readable
+    var step = Math.max(1, Math.floor(cand.length / 70));
+    var sample = cand.filter(function (_, i) { return i % step === 0; });
+    var chart = new C.Chart(canvas.querySelector("canvas"), {
+      xLabels: sample.map(function (c) { return money(c.price, 0); }),
+      series: [
+        { name: "Units/day", color: chartColor(2), data: sample.map(function (c) { return c.estimated_demand; }) },
+        { name: "Revenue", color: chartColor(3), axis: "right",
+          data: sample.map(function (c) { return c.estimated_revenue; }) },
+      ],
+      yFmt: function (v) { return n(v, 0); },
+      yFmtRight: function (v) { return money(v, 0); },
+      title: "Price sweep (" + cand.length + " candidates)",
+    });
+    state.charts.push(chart);
   }
 
-  /* ------------------- shared chrome ------------------- */
-  function render() {
-    var content = document.getElementById("pp-content");
-    if (!content) return;
+  /* ------------------------- render ------------------------- */
+  function errorCard(message) {
+    return '<div class="pp-card"><h3>Backend unavailable</h3>' +
+      '<div class="note bad" style="margin-bottom:14px">' + esc(message) + "</div>" +
+      '<p class="sub">Recommendations are computed by the backend; there is no in-browser fallback, ' +
+      "so nothing here would be accurate without it.</p>" +
+      '<div class="pp-actions"><button type="button" id="pp-retry">Retry</button></div></div>';
+  }
+
+  function contentHtml() {
+    if (!P || !P.active()) {
+      return '<div class="pp-empty">No dataset loaded yet.<br/>Upload a sales CSV to train the models ' +
+        "and get price recommendations.<br/>" +
+        '<button type="button" class="ds-upload-btn" id="pp-upload">↑ Upload Dataset</button></div>';
+    }
+    var bk = root.PricingBackend;
+    if (!bk || !bk.datasetId) {
+      return errorCard(bk && bk.offline
+        ? "The dataset could not be sent to the backend, so no model was trained."
+        : "The dataset has not been sent to the backend yet.");
+    }
+    if (state.error) return reportCard() + errorCard(state.error);
+    if (!state.portfolio) return '<div class="pp-card"><p class="sub">Loading recommendations from the backend…</p></div>';
+
+    var items = state.portfolio.items || [];
+    return reportCard() +
+      '<div class="pp-card">' + portfolioTable(items) +
+      '<div class="pp-actions"><button type="button" class="btn-secondary" id="pp-export">Download predictions (CSV)</button>' +
+      '<button type="button" class="btn-secondary" id="pp-refresh">Refresh</button></div></div>' +
+      priceChart(items) +
+      (state.detail ? detailPanel(state.detail) : "");
+  }
+
+  function bind() {
+    var host = document.getElementById("pp-content");
+    if (!host) return;
+    var up = host.querySelector("#pp-upload");
+    if (up) up.onclick = function () { root.PricingUI && root.PricingUI.openModal && root.PricingUI.openModal(); };
+    var retry = host.querySelector("#pp-retry");
+    if (retry) retry.onclick = function () { fetchAll(true); };
+    var refresh = host.querySelector("#pp-refresh");
+    if (refresh) refresh.onclick = function () { fetchAll(true); };
+
+    host.querySelectorAll(".pp-table tbody tr[data-product]").forEach(function (tr) {
+      tr.onclick = function () { selectProduct(tr.getAttribute("data-product")); };
+    });
+
+    host.querySelectorAll(".pp-toggle button").forEach(function (b) {
+      b.onclick = function () {
+        var objective = b.getAttribute("data-objective");
+        if (objective === state.objective) return;
+        state.objective = objective;
+        state.detail = null;
+        fetchAll(true);
+      };
+    });
+
+    var exp = host.querySelector("#pp-export");
+    if (exp) exp.onclick = exportCsv;
+
+    if (state.detail) detailChart(state.detail);
+    attachPriceChart();
+  }
+
+  function paint() {
+    var host = document.getElementById("pp-content");
+    if (!host) return;
     destroyCharts();
-    var view = state.mode === "dataset" ? renderDataset() : renderManual();
-    content.innerHTML = "";
-    if (view) content.appendChild(view);
+    host.innerHTML = contentHtml();
+    bind();
+  }
+
+  function fetchAll(force) {
+    if (state.loading && !force) return;
+    if (!P || !P.active() || !datasetId()) { paint(); return; }
+    var token = ++state.token;
+    state.loading = true;
+    state.error = null;
+    if (force) { state.portfolio = null; state.detail = null; }
+    paint();
+
+    loadPortfolio().then(function (port) {
+      if (token !== state.token) return;
+      state.portfolio = port;
+      state.loading = false;
+      var items = port.items || [];
+      var wanted = state.selected && items.some(function (i) { return i.product === state.selected; })
+        ? state.selected : (items[0] ? items[0].product : null);
+      if (!wanted) { paint(); return; }
+      return selectProduct(wanted, token);
+    }).catch(function (e) {
+      if (token !== state.token) return;
+      state.loading = false;
+      state.portfolio = null;
+      state.error = e && e.message ? e.message : String(e);
+      paint();
+    });
+  }
+
+  function selectProduct(pid, token) {
+    if (token == null) token = state.token;
+    state.selected = pid;
+    paint();
+    return loadDetail(pid).then(function (res) {
+      if (token !== state.token) return;
+      state.detail = res;
+      paint();
+      renderSteps();
+    }).catch(function (e) {
+      if (token !== state.token) return;
+      state.detail = { supports_optimization: false, reason: e && e.message ? e.message : String(e) };
+      paint();
+    });
+  }
+
+  function exportCsv() {
+    if (!state.portfolio || !state.portfolio.items) return;
+    var headers = ["product", "current_price", "recommended_price", "change_pct", "elasticity",
+      "expected_demand", "expected_revenue", "expected_profit", "reliability"];
+    var rows = state.portfolio.items.map(function (it) {
+      return [it.product, it.current_price, it.recommended_price, it.change_pct, it.elasticity,
+        it.expected_demand, it.expected_revenue, it.expected_profit == null ? "" : it.expected_profit,
+        it.reliability];
+    });
+    var csv = P.toCSV(headers, rows);
+    P.download("smart-pricing-predictions-" + new Date().toISOString().slice(0, 10) + ".csv", csv);
+    if (root.PricingUI && root.PricingUI.toast) {
+      root.PricingUI.toast("Export ready", "Backend predictions downloaded as CSV.", "ok");
+    }
+  }
+
+  /* ------------------------- mount ------------------------- */
+  function renderSteps() {
+    var host = document.getElementById("pp-steps");
+    if (!host) return;
+    host.innerHTML = steps(currentStep());
+  }
+
+  function render() {
+    var host = document.getElementById("pp-content");
+    if (!host) {
+      var legacy = document.getElementById("predict-root");
+      if (!legacy) return;
+    }
+    renderSteps();
+    if (!P || !P.active()) { state.portfolio = null; state.detail = null; paint(); return; }
+    if (state.portfolio) paint();
+    else fetchAll(false);
   }
 
   function mount() {
@@ -388,45 +569,93 @@
     if (!P) return;
     css();
 
-    var a = P.analytics();
-    state.product = a && a.productList[0] ? a.productList[0].product_id : "P001";
-
     var panel = el(
       '<div class="pp-panel">' +
       '<div id="pp-steps"></div>' +
-      '<div class="pp-modes">' +
-      '<button class="mode-btn active" data-mode="dataset">Dataset Mode</button>' +
-      '<button class="mode-btn" data-mode="manual">Manual Mode</button>' +
-      '</div>' +
-      '<div class="pp-body"><div id="pp-content"></div></div>' +
-      '</div>');
-    host.appendChild(panel);
+      '<div class="pp-card" style="padding:16px 20px"><div class="pp-section-head" style="margin:0">' +
+      '<h3>Objective</h3>' +
+      '<div class="pp-toggle" role="group" aria-label="Objective">' +
+      '<button type="button" class="active" data-objective="profit">Maximise profit</button>' +
+      '<button type="button" data-objective="revenue">Maximise revenue</button>' +
+      "</div></div></div>" +
+      '<div id="pp-content"></div>' +
+      "</div>");
 
-    panel.querySelectorAll(".mode-btn").forEach(function (b) {
+    // re-bind the objective toggle (lives outside #pp-content)
+    panel.querySelectorAll(".pp-toggle button").forEach(function (b) {
       b.onclick = function () {
-        panel.querySelectorAll(".mode-btn").forEach(function (x) { x.classList.remove("active"); });
-        b.classList.add("active");
-        state.mode = b.getAttribute("data-mode");
-        renderSteps();
-        render();
+        var objective = b.getAttribute("data-objective");
+        if (objective === state.objective) return;
+        state.objective = objective;
+        panel.querySelectorAll(".pp-toggle button").forEach(function (x) {
+          x.classList.toggle("active", x === b);
+        });
+        state.detail = null;
+        state.selected = null;
+        fetchAll(true);
       };
     });
 
+    host.appendChild(panel);
     renderSteps();
+
+    document.addEventListener("pricing-api-ready", function () {
+      if (P.active() && datasetId()) fetchAll(true);
+      paint();
+    });
+    document.addEventListener("pricing-api-state", function (e) {
+      // keep the retry button usable even while the API is down
+      var retry = document.getElementById("pp-retry");
+      if (retry) retry.disabled = false;
+      if (e.detail && !e.detail.ready) state.error = state.error || null;
+    });
+
     render();
   }
 
-  function renderSteps() {
-    var host = document.getElementById("pp-steps");
+  /* --------------------------- Portfolio page -------------------------- */
+  function renderPortfolio() {
+    var host = document.getElementById("portfolio-root");
     if (!host) return;
-    host.innerHTML = state.mode === "dataset"
-      ? steps(1) + ' <span style="color:var(--faint);font-size:12px;margin-left:auto;align-self:center">Dataset Mode — analyze and predict from uploaded data</span>'
-      : steps(1) + ' <span style="color:var(--faint);font-size:12px;margin-left:auto;align-self:center">Manual Mode — predict from entered values</span>';
+    if (!P) P = root.PricingData;
+    if (!P || !P.active()) {
+      host.innerHTML = '<div class="pp-card"><div class="pp-empty">Upload a dataset on the Upload ' +
+        "&amp; Analytics page to see portfolio recommendations.</div></div>";
+      return;
+    }
+    if (state.error) {
+      host.innerHTML = '<div class="pp-card"><div class="pp-error">' + esc(state.error.message) +
+        '</div><button type="button" class="pp-btn" id="pf-retry">Retry</button></div>';
+      var b = document.getElementById("pf-retry");
+      if (b) b.onclick = function () { state.error = null; fetchAll(true); };
+      return;
+    }
+    if (!state.portfolio) {
+      host.innerHTML = '<div class="pp-card"><div class="pp-empty">Calculating portfolio ' +
+        "recommendations…</div></div>";
+      return;
+    }
+    var raw = state.portfolio && state.portfolio.items ? state.portfolio.items : state.portfolio;
+    var items = Array.isArray(raw) ? raw : [];
+    var total = items.reduce(function (acc, it) {
+      if (it.expected_profit == null || it.current_profit == null) return acc;
+      return acc + (it.expected_profit - it.current_profit);
+    }, 0);
+    var raised = items.filter(function (it) { return it.change_pct > 0; }).length;
+    host.innerHTML = '<div class="pp-panel"><div class="pp-card" style="padding:18px 20px">' +
+      '<div class="pp-kpis">' +
+      kpi("Products", n(items.length), "with a usable demand curve") +
+      kpi("Price increases", n(raised), "of " + n(items.length) + " recommendations") +
+      (total ? kpi("Daily profit impact", money(total, 0), "sum of the portfolio at the recommended prices") : "") +
+      "</div></div>" + portfolioTable(items) + "</div>";
   }
 
   root.PricingPredict = {
-    mount: mount, render: render, refresh: render,
-    getMode: function () { return state.mode; },
-    setMode: function (m) { if (m === "dataset" || m === "manual") state.mode = m; },
+    mount: mount,
+    renderPortfolio: renderPortfolio,
+    render: render,
+    refresh: render,
+    getMode: function () { return "dataset"; },
+    productRow: productRow,
   };
 })(typeof window !== "undefined" ? window : globalThis);

@@ -25,6 +25,10 @@
     return Number(n).toLocaleString(undefined, { maximumFractionDigits: d == null ? 2 : d });
   }
   function money(n) { return P ? P.fmtMoney(n) : "$" + fmt(n); }
+  function col(i) {
+    return (root.PricingCharts && root.PricingCharts.color)
+      ? root.PricingCharts.color(i) : "currentColor";
+  }
   function chart() { return root.PricingCharts && root.PricingCharts.Chart ? root.PricingCharts.Chart : null; }
 
   function destroyChart(id) {
@@ -79,8 +83,8 @@
     draw("ml-up-compare", {
       xLabels: models.map(function (m, i) { return "M" + (i + 1); }),
       series: [
-        { name: "R\u00B2", color: "#5b8cff", type: "bar", data: models.map(function (m) { return m.r2; }) },
-        { name: "RMSE (units)", color: "#8b5cf6", type: "bar", data: models.map(function (m) { return m.rmse; }) },
+        { name: "R\u00B2", color: col(0), type: "bar", data: models.map(function (m) { return m.r2; }) },
+        { name: "RMSE (units)", color: col(4), type: "bar", data: models.map(function (m) { return m.rmse; }) },
       ],
       yFmt: function (v) { return fmt(v, 3); },
       title: "Hold-out + cross-validation comparison",
@@ -101,7 +105,7 @@
     var top = imp.slice(0, 10);
     draw("ml-up-imp", {
       xLabels: top.map(function (f) { return f.feature; }),
-      series: [{ name: "Importance", color: "#8b5cf6", type: "bar", data: top.map(function (f) { return f.importance; }) }],
+      series: [{ name: "Importance", color: col(4), type: "bar", data: top.map(function (f) { return f.importance; }) }],
       yFmt: function (v) { return fmt(v, 3); },
       title: "Feature importances (normalised to sum 1)",
     });
@@ -117,8 +121,8 @@
       xLabels: labels,
       showValues: "maxmin",
       series: [
-        { name: "Actual", color: "#5b8cff", data: tp.slice(0, n).map(function (r) { return r.actual; }) },
-        { name: "Predicted", color: "#34d399", data: tp.slice(0, n).map(function (r) { return r.predicted; }) },
+        { name: "Actual", color: col(0), data: tp.slice(0, n).map(function (r) { return r.actual; }) },
+        { name: "Predicted", color: col(2), data: tp.slice(0, n).map(function (r) { return r.predicted; }) },
       ],
       yFmt: function (v) { return fmt(v, 1); },
       title: "Hold-out rows: actual vs predicted (first " + n + ")",
@@ -128,10 +132,16 @@
   function predictionsTable(train) {
     var rows = train.predictions_table || [];
     if (!rows.length) return "<p class='ml-empty'>No rows to show.</p>";
-    var headers = Object.keys(rows[0]);
+    var headers = Object.keys(rows[0]).filter(function (h) {
+      return rows[0][h] == null || typeof rows[0][h] !== "object";
+    });
     var head = headers.map(function (h) { return "<th>" + esc(h) + "</th>"; }).join("");
     var body = rows.map(function (r) {
-      return "<tr>" + headers.map(function (h) { return "<td>" + esc(r[h]) + "</td>"; }).join("") + "</tr>";
+      return "<tr>" + headers.map(function (h) {
+        var v = r[h];
+        if (v && typeof v === "object") v = JSON.stringify(v);
+        return "<td>" + esc(v) + "</td>";
+      }).join("") + "</tr>";
     }).join("");
     return '<div style="overflow:auto;max-height:280px"><table class="ml-table"><thead><tr>' + head +
       "</tr></thead><tbody>" + body + "</tbody></table></div>";
@@ -216,8 +226,8 @@
           xLabels: labels,
           showValues: "maxmin",
           series: [
-            { name: "Current", color: "#6b7a99", type: "bar", data: port.items.map(function (it) { return it.current_price; }) },
-            { name: "Recommended", color: "#34d399", type: "bar", data: port.items.map(function (it) { return it.recommended_price; }) },
+            { name: "Current", color: col(1), type: "bar", data: port.items.map(function (it) { return it.current_price; }) },
+            { name: "Recommended", color: col(2), type: "bar", data: port.items.map(function (it) { return it.recommended_price; }) },
           ],
           yFmt: function (v) { return money(v, 0); },
           title: "Current vs recommended price",
@@ -227,84 +237,6 @@
       if (portWrap) portWrap.innerHTML = "<h4>Portfolio</h4>" +
         '<p class="ml-empty">Portfolio recommendations unavailable (backend offline).</p>';
     });
-  }
-
-  /* ------------------------------------------------------------------ */
-  /* Price recommendation (backend-driven)                               */
-  /* ------------------------------------------------------------------ */
-  function uploadPriceAction(objSel, prodSel, out) {
-    var obj = objSel.value;
-    var prodId = prodSel.value;
-    var rows = P.rows();
-    var row = rows.filter(function (r) { return r.product_id === prodId; }).pop() || rows[0];
-    if (!row) { showErr(out, "No dataset rows available."); return; }
-    var payload = { dataset_id: BACKEND.datasetId, objective: obj, row: row };
-    var btn = out.closest(".ml-price").querySelector("button");
-    btn.disabled = true; btn.textContent = "Optimising\u2026";
-    root.PricingUI.spinner(true);
-    fetch((window.API_BASE || "") + "/api/pricing/recommend", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
-    }).then(function (r) {
-      return r.json().then(function (j) { if (!r.ok) throw new Error(j.detail || r.statusText); return j; });
-    }).then(function (res) {
-      btn.disabled = false; btn.textContent = "Recommend price";
-      root.PricingUI.spinner(false);
-      var rc = resultEl(out);
-      if (!res.supports_optimization) {
-        rc.head("Not supported", "");
-        rc.row("Status", "Price optimisation is not possible: " + esc(res.reason || "insufficient data"));
-        return;
-      }
-      rc.head("Backend recommendation", "objective \u00B7 " + res.optimal.objective + " \u00B7 " + res.currency);
-      rc.row("Current price", money(res.current.price));
-      rc.row("Recommended price", money(res.optimal.price), "hero");
-      rc.row("Estimated revenue", money(res.optimal.estimated_revenue));
-      if (res.optimal.estimated_profit != null) rc.row("Estimated profit", money(res.optimal.estimated_profit));
-      rc.row("Change", fmt(res.optimal.change_pct, 1) + "% \u00B7 " + fmt(res.demand_model.elasticity, 2) + " elasticity");
-      if (res.reliability) {
-        var rel = res.reliability;
-        rc.row("Reliability", '<span class="rel-badge rel-' + esc(String(rel.level).toLowerCase()) + '">' +
-          esc(rel.level) + " \u00B7 " + rel.score + "/" + rel.max + "</span>");
-        rc.row("Reliability reasons", esc((rel.reasons || []).join(" \u00B7 ")));
-      }
-      out.insertAdjacentHTML("beforeend",
-        '<div class="ml-reasons">' + (res.reasons || []).map(function (r) {
-          return '<div class="ml-reason"><span>' + esc(r.icon || "\u2022") + "</span><p>" + esc(r.text) + "</p></div>";
-        }).join("") + "</div>" +
-        (res.rules && res.rules.length
-          ? '<div class="ml-rules"><h5>Business rules applied</h5><ul>' +
-            res.rules.map(function (r) { return "<li>" + esc(r.detail || r.rule || JSON.stringify(r)) + "</li>"; }).join("") +
-            "</ul></div>"
-          : "") +
-        '<p class="ml-caveat">' + esc(res.caveat || "ML-based estimate, not guaranteed.") + "</p>");
-    }).catch(function (e) {
-      btn.disabled = false; btn.textContent = "Recommend price";
-      root.PricingUI.spinner(false);
-      showErr(out, e && e.message ? e.message : String(e));
-      toast("Backend offline", "Price optimisation needs the backend. Upload again once it is reachable.", "err");
-    });
-  }
-
-  function pricePanelUpload(rootEl) {
-    var host = document.createElement("div");
-    host.className = "ml-host ml-price";
-    host.innerHTML =
-      '<div class="ml-grid2"><div class="ml-col">' +
-      "<label>Product</label><select id='ml-up-price-prod'></select>" +
-      "<label>Objective</label><select id='ml-up-price-obj'><option value='revenue'>Maximise revenue</option><option value='profit'>Maximise profit</option></select>" +
-      '<button id="ml-up-price-run">Recommend price</button>' +
-      "</div><div class='ml-col'><div id='ml-up-price-out' class='result empty'>Recommend a price to see why this price.</div></div></div>";
-    rootEl.innerHTML = "";
-    rootEl.appendChild(host);
-    var prods = P.analytics().productList.map(function (p) { return p.product_id; });
-    var sel = host.querySelector("#ml-up-price-prod");
-    prods.forEach(function (id) { sel.add(new Option(id, id)); });
-    var run = host.querySelector("#ml-up-price-run");
-    run.onclick = function () {
-      uploadPriceAction(host.querySelector("#ml-up-price-obj"), sel, host.querySelector("#ml-up-price-out"));
-    };
   }
 
   /* ---------- small helpers (duplicated locally to stay standalone) -- */
@@ -335,14 +267,14 @@
   /* public API                                                          */
   /* ------------------------------------------------------------------ */
   var EMPTY_ML =
-    '<div class="ml-empty" style="padding:16px">Upload a CSV dataset to run the ML pipeline: ' +
-    "the backend compares Linear Regression, Random Forest, Gradient Boosting and XGBoost " +
-    "(5-fold cross-validation + hold-out metrics) and drives rule-constrained price recommendations. " +
-    '<button type="button" class="ds-upload-btn" onclick="PricingUI&amp;&amp;PricingUI.openModal&amp;&amp;PricingUI.openModal()">&#8593; Upload Dataset</button></div>';
-
-  var EMPTY_PRICE =
-    '<div class="ml-empty" style="padding:16px">Upload a dataset to get rule-constrained price recommendations with reliability scores. ' +
-    '<button type="button" class="ds-upload-btn" onclick="PricingUI&amp;&amp;PricingUI.openModal&amp;&amp;PricingUI.openModal()">&#8593; Upload Dataset</button></div>';
+    '<div class="ml-empty" style="padding:20px;background:var(--card);border:1px solid var(--border);' +
+    'border-radius:var(--radius)">' +
+    "<p>Upload a CSV dataset to run the ML pipeline. The backend compares Linear Regression, " +
+    "Random Forest, Gradient Boosting and XGBoost (5-fold cross-validation plus hold-out " +
+    "metrics) and drives rule-constrained price recommendations.</p>" +
+    '<button type="button" class="ds-upload-btn" style="margin-top:14px" ' +
+    'onclick="PricingUI&amp;&amp;PricingUI.openModal&amp;&amp;PricingUI.openModal()">' +
+    "&#8593; Upload Dataset</button></div>";
 
   function render() {
     P = root.PricingData;
@@ -364,24 +296,11 @@
     if (!P.active()) body.innerHTML = EMPTY_ML;
     else if (isUp) uploadPanel(body);
     else if (offline) {
-      body.innerHTML = '<div class="ml-empty" style="padding:14px">Backend ML pipeline offline. The uploaded dataset is available in the in-browser panels (Analytics, Prediction Center, Decision Engine), which use the client-side model as a transparent mirror of the same data.</div>';
+      body.innerHTML = '<div class="ml-empty" style="padding:14px">Backend ML pipeline offline. The uploaded rows are still ' +
+        "available for descriptive analytics, but model metrics and price recommendations need the backend.</div>";
       destroyChart("ml-up-compare"); destroyChart("ml-up-imp"); destroyChart("ml-up-avp");
     }
   }
 
-  function renderPrice() {
-    P = root.PricingData;
-    if (!P) return;
-    BACKEND = backend();
-    var el = document.getElementById("ml-price-root");
-    if (!el) return;
-    if (!P.active()) {
-      el.innerHTML = EMPTY_PRICE;
-      return;
-    }
-    if (backend() && backend().train) pricePanelUpload(el);
-    else el.innerHTML = '<div class="ml-empty" style="padding:16px">Price recommendations need the backend. Upload again once it is reachable.</div>';
-  }
-
-  root.PricingML = { render: render, renderPrice: renderPrice, steps: steps };
+  root.PricingML = { render: render, steps: steps };
 })(typeof window !== "undefined" ? window : globalThis);

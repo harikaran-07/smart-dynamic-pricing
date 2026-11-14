@@ -16,55 +16,64 @@
     var s = document.createElement("style");
     s.textContent = `
     .ds-select{width:auto;min-width:150px;margin:0;padding:8px 12px;font-size:13px;cursor:pointer}
-    .ds-badge{font-size:13px;color:var(--ok);border:1px solid rgba(52,211,153,.35);border-radius:999px;
-      padding:5px 11px;font-weight:700;display:none;align-items:center;gap:6px;max-width:200px;
-      overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-    .toast-wrap{position:fixed;top:74px;right:18px;z-index:99999;display:flex;flex-direction:column;gap:10px;max-width:340px}
-    .toast{background:rgba(12,18,34,.96);border:1px solid var(--line);border-left:3px solid var(--acc);
-      border-radius:11px;padding:12px 15px;box-shadow:var(--shadow);font-size:13px;animation:toastIn .18s ease}
-    .toast.ok{border-left-color:var(--ok)} .toast.err{border-left-color:var(--bad)} .toast.warn{border-left-color:var(--warn)}
-    .toast b{display:block;font-size:13px;color:var(--txt);margin-bottom:2px}
-    .toast span{color:var(--mut);font-size:12px;line-height:1.5;display:block}
+    .ds-badge{font-size:12.5px;color:var(--ok-fg);background:var(--ok-bg);border:1px solid var(--ok-bg);
+      border-radius:999px;padding:5px 12px;font-weight:600;display:none;align-items:center;gap:6px;
+      max-width:210px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+    .toast-wrap{position:fixed;bottom:18px;right:18px;z-index:99999;display:flex;flex-direction:column;
+      gap:10px;max-width:340px}
+    .toast{background:var(--card);border:1px solid var(--border);border-left:3px solid var(--accent);
+      border-radius:12px;padding:12px 15px;box-shadow:var(--shadow);font-size:13px;
+      animation:toastIn .18s ease}
+    .toast.ok{border-left-color:var(--ok-fg)} .toast.err{border-left-color:var(--bad-fg)}
+    .toast.warn{border-left-color:var(--warn-fg)}
+    .toast b{display:block;font-size:13.5px;color:var(--ink);margin-bottom:2px}
+    .toast span{color:var(--muted);font-size:12.5px;line-height:1.5;display:block}
     @keyframes toastIn{from{opacity:0;transform:translateX(16px)}to{opacity:1;transform:none}}
-    .px-overlay{position:fixed;inset:0;background:rgba(6,10,20,.7);backdrop-filter:blur(3px);z-index:99990;
+    .px-overlay{position:fixed;inset:0;background:rgba(43,33,24,.45);z-index:99990;
       display:none;align-items:center;justify-content:center}
     .px-overlay.show{display:flex}
-    .px-spinner{width:46px;height:46px;border-radius:50%;border:4px solid rgba(91,140,255,.2);
-      border-top-color:var(--acc);animation:pxspin .8s linear infinite}
+    .px-spinner{width:44px;height:44px;border-radius:50%;border:4px solid var(--border);
+      border-top-color:var(--accent);animation:pxspin .8s linear infinite}
     @keyframes pxspin{to{transform:rotate(360deg)}}
-    .px-modal{position:fixed;inset:0;z-index:99995;display:none;align-items:flex-start;justify-content:center;
-      background:rgba(6,10,20,.72);backdrop-filter:blur(4px);padding:40px 16px;overflow:auto}
+    .px-modal{position:fixed;inset:0;z-index:99995;display:none;align-items:flex-start;
+      justify-content:center;background:rgba(43,33,24,.45);padding:40px 16px;overflow:auto}
     .px-modal.show{display:flex}
-    .px-modal-box{background:linear-gradient(180deg,var(--card),var(--card-2));border:1px solid var(--line);
-      border-radius:var(--rad);box-shadow:var(--shadow);width:100%;max-width:780px;padding:22px;position:relative}
-    .px-modal-box h3{margin:0 0 6px;font-size:20px}
-    .px-modal-box .sub{font-size:13px;color:var(--faint);margin:0 0 16px}
-    .px-x{position:absolute;top:14px;right:16px;background:none;border:0;color:var(--faint);font-size:20px;
-      cursor:pointer;width:auto;margin:0;box-shadow:none;padding:4px}
-    .px-x:hover{color:var(--bad);filter:none}
-    .px-drop{border:2px dashed var(--line);border-radius:12px;padding:30px 20px;text-align:center;color:var(--mut);
-      font-size:13px;cursor:pointer;transition:.15s;background:rgba(8,12,24,.4)}
-    .px-drop:hover,.px-drop.over{border-color:var(--acc);color:var(--txt)}
-    .px-drop b{color:var(--acc)}
+    .px-modal-box{background:var(--card);border:1px solid var(--border);border-radius:var(--radius);
+      box-shadow:var(--shadow);width:100%;max-width:760px;padding:24px;position:relative}
+    .px-modal-box h3{margin:0 0 6px;font-size:22px}
+    .px-modal-box .sub{font-size:13px;color:var(--muted);margin:0 0 16px}
+    .px-x{position:absolute;top:12px;right:14px;background:none;border:0;color:var(--muted);
+      font-size:22px;cursor:pointer;width:44px;height:44px;min-height:44px;padding:0;border-radius:999px}
+    .px-x:hover{color:var(--accent);background:var(--bg)}
+    .px-drop{border:2px dashed var(--border);border-radius:12px;padding:30px 20px;text-align:center;
+      color:var(--muted);font-size:13.5px;cursor:pointer;background:var(--bg)}
+    .px-drop:hover,.px-drop.over{border-color:var(--accent);color:var(--ink)}
+    .px-drop b{color:var(--accent)}
     .px-progress{display:none;margin-top:14px}
     .px-progress.show{display:block}
-    .px-progress .mb{display:flex;justify-content:space-between;font-size:12px;color:var(--mut);margin-bottom:6px}
+    .px-progress .mb{display:flex;justify-content:space-between;font-size:12.5px;color:var(--muted);
+      margin-bottom:6px}
+    .bar{height:8px;border-radius:999px;background:var(--bg);overflow:hidden}
+    .bar i{display:block;height:100%;background:var(--accent)}
     .px-preview{display:none;margin-top:16px}
     .px-preview.show{display:block}
-    .px-preview table{width:100%;border-collapse:collapse;font-size:12px;margin-top:8px}
-    .px-preview th,.px-preview td{border:1px solid var(--line);padding:6px 8px;text-align:left;
-      max-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-    .px-preview th{background:#0c1220;color:var(--acc);font-size:11px;text-transform:uppercase;letter-spacing:.4px}
-    .px-preview td{color:var(--mut)}
+    .px-preview table{width:100%;border-collapse:collapse;font-size:12.5px;margin-top:8px}
+    .px-preview th,.px-preview td{border:1px solid var(--border);padding:7px 9px;text-align:left;
+      max-width:150px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+    .px-preview th{background:var(--bg);color:var(--muted);font-size:11.5px;text-transform:uppercase;
+      letter-spacing:.4px}
+    .px-preview td{color:var(--ink)}
     .px-mapgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:10px;margin-top:16px}
-    .px-mapgrid label{font-size:11px;margin:0 0 4px}
-    .px-mapgrid label b{color:var(--txt)} .px-mapgrid label.need{color:var(--bad)}
+    .px-mapgrid label{font-size:12px;margin:0 0 4px}
+    .px-mapgrid label b{color:var(--ink)} .px-mapgrid label.need{color:var(--bad-fg)}
     .px-mapgrid select{padding:8px 10px;font-size:13px}
-    .px-error{margin-top:14px;padding:11px 13px;border-radius:10px;background:rgba(248,113,113,.1);
-      border:1px solid rgba(248,113,113,.35);color:var(--bad);font-size:13px;display:none;line-height:1.6}
+    .px-error{margin-top:14px;padding:12px 14px;border-radius:12px;background:var(--bad-bg);
+      border:1px solid var(--bad-bg);color:var(--bad-fg);font-size:13px;display:none;line-height:1.6}
     .px-error.show{display:block}
+    .px-error button{margin-top:10px;min-height:44px;padding:0 18px}
     .px-modal-actions{display:flex;gap:10px;justify-content:flex-end;margin-top:18px}
-    .px-modal-actions button{width:auto;margin:0;padding:11px 20px}
+    .px-modal-actions button{width:auto;margin:0}
+    @media (prefers-reduced-motion:reduce){ *{animation:none !important;transition:none !important} }
     `;
     document.head.appendChild(s);
   }
@@ -131,6 +140,7 @@
       '<h3>Upload Dataset</h3>' +
       '<p class="sub">Upload a CSV file. It is sent to the backend ML pipeline, which validates it, profiles it, trains and compares models, and returns structured results.</p>' +
       '<div class="px-drop" id="px-drop"><b>Choose a file</b> or drag &amp; drop here<br/><span style="font-size:12px">Accepted: .csv</span></div>' +
+      '<input type="file" id="px-file" accept=".csv,text/csv" hidden/>' +
       '<div class="px-progress" id="px-progress"><div class="mb"><span id="px-progress-label">Reading file…</span><b id="px-progress-pct">0%</b></div><div class="bar"><i id="px-progress-fill" style="width:0%"></i></div></div>' +
       '<div class="px-error" id="px-error"></div>' +
       '<div class="px-preview" id="px-preview"><b style="font-size:13px">Preview</b> <span style="color:var(--faint);font-size:12px" id="px-preview-meta"></span><div style="overflow:auto;max-height:240px"><table><thead id="px-preview-head"></thead><tbody id="px-preview-body"></tbody></table></div>' +
@@ -143,7 +153,14 @@
     m.querySelector("#px-close").onclick = closeModal;
     m.querySelector("#px-cancel").onclick = closeModal;
     var drop = m.querySelector("#px-drop");
-    drop.onclick = function () { var fi = document.createElement("input"); fi.type = "file"; fi.accept = ".csv"; fi.onchange = function () { if (fi.files[0]) handleFile(fi.files[0]); }; fi.click(); };
+    var fileInput = m.querySelector("#px-file");
+    drop.onclick = function () { if (fileInput) fileInput.click(); };
+    drop.onkeydown = function (e) {
+      if (e.key === "Enter" || e.key === " ") { e.preventDefault(); if (fileInput) fileInput.click(); }
+    };
+    drop.setAttribute("role", "button");
+    drop.setAttribute("tabindex", "0");
+    if (fileInput) fileInput.onchange = function () { if (fileInput.files[0]) handleFile(fileInput.files[0]); };
     drop.ondragover = function (e) { e.preventDefault(); drop.classList.add("over"); };
     drop.ondragleave = function () { drop.classList.remove("over"); };
     drop.ondrop = function (e) { e.preventDefault(); drop.classList.remove("over"); if (e.dataTransfer.files[0]) handleFile(e.dataTransfer.files[0]); };
@@ -327,10 +344,20 @@
       })
       .catch(function (e) {
         root.PricingBackend = { profile: null, train: null, datasetId: null, fileName: state.fileName, offline: true };
-        finishBackendFlow("offline");
-        toast("Backend offline",
-          "Uploaded dataset mirrored in-browser, but the ML pipeline could not be reached. " +
-          (e && e.message ? e.message : "Is the backend running?"), "warn");
+        spinner(false);
+        var applyBtn = document.getElementById("px-apply");
+        if (applyBtn) { applyBtn.disabled = false; applyBtn.style.display = "none"; }
+        var err = document.getElementById("px-error");
+        if (err) {
+          err.innerHTML = "<b>The backend could not be reached, so no model was trained.</b><br/>" +
+            esc(e && e.message ? e.message : "Is the server running?") +
+            '<br/><button type="button" id="px-retry">Retry</button>';
+          err.classList.add("show");
+          var retry = err.querySelector("#px-retry");
+          if (retry) retry.onclick = function () { err.classList.remove("show"); uploadToBackend(csvText); };
+        }
+        toast("Backend unreachable",
+          "Nothing was predicted. Fix the connection and press Retry.", "err");
       });
   }
 
@@ -341,8 +368,7 @@
     closeModal();
     setDataSourceUI("upload", state.fileName);
     refreshEverything(P.analytics());
-    if (how === "ok") document.getElementById("health").textContent = "Uploaded dataset · backend ML";
-    else if (how === "offline") document.getElementById("health").textContent = "Backend offline · client mirror";
+    if (how === "ok") document.getElementById("health").textContent = "Connected";
   }
 
   function setStackLabel(label) {
@@ -353,20 +379,19 @@
   /* ---------- cross-module refresh ---------- */
   function refreshEverything(a) {
     if (root.PricingAnalytics) { root.PricingAnalytics.render(); }
-    if (root.PricingPredict) { root.PricingPredict.render(); }
+    if (root.PricingPredict) { root.PricingPredict.render();
+      if (root.PricingPredict.renderPortfolio) root.PricingPredict.renderPortfolio(); }
     if (root.PricingDashboard && root.PricingDashboard.refreshAll) { root.PricingDashboard.refreshAll(); }
-    if (root.PricingML) { root.PricingML.render(); root.PricingML.renderPrice(); }
-    if (root.syncDatasetSections) root.syncDatasetSections();
-    if (root.updateHealthPill) root.updateHealthPill();
+    if (root.PricingML) { root.PricingML.render(); }
+    if (root.PricingDashboard) { root.PricingDashboard.refreshAll(); }
+    if (root.fillProducts) root.fillProducts();
   }
 
   function setDataSourceUI(kind, fileName) {
     var badge = document.getElementById("ds-badge");
     if (badge) {
-      if (kind === "upload") {
-        badge.style.display = "inline-flex";
-        badge.textContent = "● " + fileName;
-      } else badge.style.display = "none";
+      badge.classList.toggle("show", kind === "upload");
+      if (kind === "upload") badge.textContent = "● " + fileName;
     }
   }
 
